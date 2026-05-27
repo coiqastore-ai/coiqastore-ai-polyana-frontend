@@ -631,6 +631,72 @@
     }
     .offline-banner.show { display: block; }
 
+    /* ── Stepper ───────────────────────────────────────────────────────────── */
+    .stepper-row {
+        display: flex; align-items: center;
+        background: var(--bg); border: 1.5px solid var(--divider);
+        border-radius: var(--radius-sm); overflow: hidden;
+        width: fit-content;
+    }
+    .stepper-btn {
+        width: 44px; height: 44px; border: none; background: transparent;
+        font-size: 22px; cursor: pointer; color: var(--green);
+        display: flex; align-items: center; justify-content: center;
+        transition: background .15s; flex-shrink: 0;
+    }
+    .stepper-btn:active { background: var(--bg2); }
+    .stepper-value {
+        min-width: 56px; text-align: center;
+        font-size: 18px; font-weight: 700;
+        padding: 0 4px; user-select: none;
+    }
+
+    /* ── Ingredient row ────────────────────────────────────────────────────── */
+    .ingredient-row {
+        display: flex; align-items: center; gap: 6px;
+        padding: 8px 12px; border-bottom: .5px solid var(--divider);
+    }
+    .ingredient-row:last-child { border-bottom: none; }
+    .ingredient-row .form-input {
+        padding: 9px 10px; font-size: 14px; margin-top: 0;
+    }
+    .ing-name { flex: 2; min-width: 0; }
+    .ing-qty  { width: 72px; flex-shrink: 0; }
+    .ing-unit { width: 64px; flex-shrink: 0; }
+    .ing-del  {
+        width: 30px; height: 30px; border-radius: 50%;
+        background: rgba(255,59,48,.1); color: #ff3b30;
+        border: none; font-size: 14px; cursor: pointer;
+        display: flex; align-items: center; justify-content: center;
+        flex-shrink: 0;
+    }
+    .ing-del:active { background: rgba(255,59,48,.2); }
+
+    /* ── Step row ──────────────────────────────────────────────────────────── */
+    .step-row {
+        display: flex; align-items: flex-start; gap: 8px;
+        padding: 8px 12px; border-bottom: .5px solid var(--divider);
+    }
+    .step-row:last-child { border-bottom: none; }
+    .step-num {
+        width: 22px; height: 22px; border-radius: 50%;
+        background: var(--green); color: #fff;
+        font-size: 11px; font-weight: 700;
+        display: flex; align-items: center; justify-content: center;
+        flex-shrink: 0; margin-top: 11px;
+    }
+    .step-row textarea.form-input {
+        flex: 1; resize: none; min-height: 60px; padding: 9px 10px; font-size: 14px;
+    }
+
+    /* ── Ingredient badge on recipe card ───────────────────────────────────── */
+    .recipe-badge {
+        display: inline-flex; align-items: center; gap: 2px;
+        background: var(--bg2); border-radius: 6px;
+        padding: 1px 6px; font-size: 11px; color: var(--hint);
+        margin-left: 4px; vertical-align: middle;
+    }
+
     /* ── Misc ──────────────────────────────────────────────────────────────── */
     .divider { height: .5px; background: var(--divider); margin: 0; }
     .mb8 { margin-bottom: 8px; }
@@ -902,6 +968,83 @@
     </div>
 </div>
 
+<!-- ══ SCREEN: Recipe form ══════════════════════════════════════════════════ -->
+<div id="s-recipe" class="screen">
+    <div class="page" id="recipe-page">
+        <div class="greeting-row" style="margin-bottom:16px">
+            <div class="greeting-name" id="recipe-screen-title">Новый рецепт</div>
+            <button class="settings-btn" onclick="cancelRecipe()" aria-label="Закрыть">✕</button>
+        </div>
+
+        <label class="form-label">Эмодзи блюда</label>
+        <div class="emoji-picker" id="recipe-emoji-picker"></div>
+
+        <label class="form-label" for="recipe-name-full">Название *</label>
+        <input class="form-input" id="recipe-name-full" type="text"
+               placeholder="Шашлык из свинины" maxlength="80" autocomplete="off">
+
+        <div style="display:flex;gap:24px;flex-wrap:wrap;align-items:flex-end;margin-top:4px">
+            <div>
+                <label class="form-label">Порций</label>
+                <div class="stepper-row">
+                    <button class="stepper-btn" onclick="stepServings(-1)">−</button>
+                    <span id="servings-display" class="stepper-value">4</span>
+                    <button class="stepper-btn" onclick="stepServings(1)">＋</button>
+                </div>
+            </div>
+            <div style="flex:1;min-width:110px">
+                <label class="form-label" for="recipe-cook-time">Время готовки</label>
+                <div style="position:relative">
+                    <input class="form-input" id="recipe-cook-time" type="number"
+                           placeholder="60" min="1" max="999">
+                    <span style="position:absolute;right:12px;top:50%;transform:translateY(-50%);color:var(--hint);font-size:13px;pointer-events:none">мин.</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Ingredients -->
+        <div class="section-header" style="margin-top:20px">
+            <span class="section-title">Ингредиенты</span>
+            <button class="section-action" style="border:none;background:none;cursor:pointer" onclick="addIngredientRow()">＋ Добавить</button>
+        </div>
+        <div style="background:var(--bg2);border-radius:4px;padding:4px 12px 2px;margin-bottom:4px">
+            <div style="display:flex;gap:6px;font-size:11px;font-weight:600;color:var(--hint);text-transform:uppercase;letter-spacing:.3px">
+                <span style="flex:2">Название</span>
+                <span style="width:72px">Кол-во</span>
+                <span style="width:64px">Ед.</span>
+                <span style="width:30px"></span>
+            </div>
+        </div>
+        <div class="card" id="ingredients-list">
+            <div id="ing-empty" style="padding:16px;text-align:center;color:var(--hint);font-size:14px">
+                Нажмите «＋ Добавить», чтобы внести ингредиенты
+            </div>
+        </div>
+        <button class="btn btn-outline btn-sm" onclick="addIngredientRow()" style="margin-top:8px;width:auto;padding:9px 20px">
+            ＋ Ингредиент
+        </button>
+
+        <!-- Steps (collapsible) -->
+        <div class="collapsible-section" style="margin-top:20px">
+            <div class="collapsible-toggle" onclick="toggleSteps(this)">
+                <span>▶ Шаги приготовления</span>
+            </div>
+            <div class="collapsible-body" id="steps-body">
+                <div id="steps-list">
+                    <div style="padding:6px 0 10px;color:var(--hint);font-size:13px">
+                        Шаги не обязательны, но помогут вспомнить рецепт
+                    </div>
+                </div>
+                <button class="btn btn-outline btn-sm" onclick="addStepRow()" style="margin-top:4px;width:auto;padding:9px 20px">
+                    ＋ Шаг
+                </button>
+            </div>
+        </div>
+
+        <div style="height:28px"></div>
+    </div>
+</div>
+
 <!-- ══ SCREEN: Shared (guest view) ═════════════════════════════════════════ -->
 <div id="s-shared" class="screen">
     <div class="page">
@@ -1097,13 +1240,7 @@ function closeSheet() {
 }
 
 function openAddRecipe() {
-    haptic();
-    $('recipe-name-input').value = '';
-    $('recipe-servings').value = 4;
-    document.querySelectorAll('.emoji-option').forEach((e,i) => e.classList.toggle('selected', i===0));
-    $('overlay').classList.add('show');
-    $('add-recipe-sheet').classList.add('show');
-    setTimeout(() => $('recipe-name-input').focus(), 300);
+    if (S.currentEvent) openRecipeScreen(S.currentEvent.id);
 }
 
 function selectEmoji(el) {
@@ -1663,15 +1800,22 @@ function renderRecipes(recipes) {
         const color = authorColor(r.added_by?.user_id);
         const by = r.added_by?.first_name || 'Гость';
         const ago = r.added_at ? timeAgo(r.added_at) : '';
+        const ingBadge = r.ingredients_count > 0
+            ? `<span class="recipe-badge">🥄 ${r.ingredients_count}</span>` : '';
+        const timeBadge = r.cook_time_min
+            ? `<span class="recipe-badge">⏱ ${r.cook_time_min} мин.</span>` : '';
         return `
         <div class="recipe-card" oncontextmenu="return false" data-id="${r.id}"
              ontouchstart="startLongPress(${r.id},this)" ontouchend="endLongPress()" ontouchcancel="endLongPress()"
-             onclick="haptic()">
+             onclick="viewRecipeSheet(${r.id})">
             <div class="recipe-stripe" style="background:${color}"></div>
             <div class="recipe-emoji">${r.emoji||'🍽'}</div>
             <div class="recipe-info">
                 <div class="recipe-name">${esc(r.name)}</div>
-                <div class="recipe-meta">добавил(а) ${esc(by)}${ago?' · '+ago:''}${r.servings?' · '+r.servings+' порц.':''}</div>
+                <div class="recipe-meta">
+                    ${esc(by)}${ago?' · '+ago:''}${r.servings?' · '+r.servings+' порц.':''}
+                    ${ingBadge}${timeBadge}
+                </div>
             </div>
         </div>`;
     }).join('');
@@ -1839,6 +1983,21 @@ async function doDeleteEvent() {
     }
 }
 
+function viewRecipeSheet(recipeId) {
+    haptic('light');
+    const recipe = S.currentEvent?.recipes?.find(r => r.id === recipeId);
+    if (!recipe) return;
+    const items = [];
+    if (recipe.ingredients_count > 0)
+        items.push({icon:'🥄', label:`${recipe.ingredients_count} ингредиентов`, fn:'closeSheet()'});
+    if (recipe.servings)
+        items.push({icon:'👥', label:`${recipe.servings} порций`, fn:'closeSheet()'});
+    if (recipe.cook_time_min)
+        items.push({icon:'⏱', label:`${recipe.cook_time_min} минут`, fn:'closeSheet()'});
+    items.push({icon:'🗑', label:'Удалить блюдо', fn:`closeSheet();deleteRecipe(${recipeId})`, destructive:true});
+    openSheet(`${recipe.emoji||'🍽'} ${recipe.name}`, items);
+}
+
 function timeAgo(iso) {
     const diff = Date.now() - new Date(iso).getTime();
     const m = Math.floor(diff / 60000);
@@ -1847,6 +2006,212 @@ function timeAgo(iso) {
     const h = Math.floor(m / 60);
     if (h < 24) return `${h} ч. назад`;
     return `${Math.floor(h/24)} дн. назад`;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// RECIPE FORM SCREEN
+// ═══════════════════════════════════════════════════════════════════════════
+
+const RF = { servings: 4, ingredients: [], steps: [], eventId: null };
+
+const RECIPE_EMOJIS = ['🥩','🍗','🐟','🥗','🍝','🍰','🥘','🍲','🥞','🍖','🥦','🫕','🌮','🥙','🍛','🫔'];
+
+function openRecipeScreen(eventId) {
+    haptic();
+    RF.eventId = eventId;
+    RF.servings = 4;
+    RF.ingredients = [];
+    RF.steps = [];
+
+    $('recipe-name-full').value = '';
+    $('recipe-cook-time').value = '';
+    $('recipe-name-full').classList.remove('error');
+    $('recipe-screen-title').textContent = 'Новый рецепт';
+    $('servings-display').textContent = RF.servings;
+
+    // Reset emoji picker
+    $('recipe-emoji-picker').innerHTML = RECIPE_EMOJIS.map((em, i) =>
+        `<button class="emoji-option${i===0?' selected':''}" data-emoji="${em}"
+                 onclick="selectRecipeEmoji(this)">${em}</button>`
+    ).join('');
+
+    // Reset ingredients / steps
+    renderIngredients();
+    renderSteps();
+    $('steps-body').classList.remove('open');
+    const stTgl = document.querySelector('#s-recipe .collapsible-toggle span');
+    if (stTgl) stTgl.textContent = '▶ Шаги приготовления';
+
+    showScreen('s-recipe');
+    setBackBtn(cancelRecipe);
+    setMainBtn('💾 Сохранить рецепт', submitFullRecipe);
+
+    setTimeout(() => $('recipe-name-full').focus(), 350);
+}
+
+function cancelRecipe() {
+    haptic();
+    if (S.currentEvent) {
+        showScreen('s-detail');
+        setBackBtn(goHome);
+        setMainBtn('Список покупок →', () => toast('Скоро: агрегация покупок'));
+    } else {
+        goHome();
+    }
+}
+
+function selectRecipeEmoji(el) {
+    document.querySelectorAll('#recipe-emoji-picker .emoji-option').forEach(e => e.classList.remove('selected'));
+    el.classList.add('selected');
+    haptic('light');
+}
+
+function stepServings(delta) {
+    haptic('light');
+    RF.servings = Math.max(1, Math.min(200, RF.servings + delta));
+    $('servings-display').textContent = RF.servings;
+}
+
+// ── Ingredients ───────────────────────────────────────────────────────────────
+
+function addIngredientRow() {
+    haptic('light');
+    RF.ingredients.push({name:'', qty:'', unit:''});
+    renderIngredients();
+    // Focus last name field
+    const inputs = document.querySelectorAll('#ingredients-list .ing-name');
+    if (inputs.length) setTimeout(() => inputs[inputs.length-1].focus(), 80);
+}
+
+function removeIngredientRow(idx) {
+    haptic('light');
+    RF.ingredients.splice(idx, 1);
+    renderIngredients();
+}
+
+function renderIngredients() {
+    const list = $('ingredients-list');
+    if (!list) return;
+    if (RF.ingredients.length === 0) {
+        list.innerHTML = `<div id="ing-empty" style="padding:16px;text-align:center;color:var(--hint);font-size:14px">
+            Нажмите «＋ Добавить», чтобы внести ингредиенты
+        </div>`;
+        return;
+    }
+    list.innerHTML = RF.ingredients.map((ing, i) => `
+        <div class="ingredient-row">
+            <input class="form-input ing-name" type="text" placeholder="Название" value="${esc(ing.name)}"
+                   oninput="RF.ingredients[${i}].name=this.value" autocomplete="off">
+            <input class="form-input ing-qty" type="number" placeholder="кол." value="${ing.qty||''}"
+                   min="0" step="any" oninput="RF.ingredients[${i}].qty=this.value">
+            <input class="form-input ing-unit" type="text" placeholder="г/шт" value="${esc(ing.unit)}"
+                   oninput="RF.ingredients[${i}].unit=this.value" autocomplete="off">
+            <button class="ing-del" onclick="removeIngredientRow(${i})">✕</button>
+        </div>
+    `).join('');
+}
+
+// ── Steps ─────────────────────────────────────────────────────────────────────
+
+function addStepRow() {
+    haptic('light');
+    RF.steps.push({text:''});
+    renderSteps();
+    const textareas = document.querySelectorAll('#steps-list textarea');
+    if (textareas.length) setTimeout(() => textareas[textareas.length-1].focus(), 80);
+}
+
+function removeStepRow(idx) {
+    haptic('light');
+    RF.steps.splice(idx, 1);
+    renderSteps();
+}
+
+function renderSteps() {
+    const list = $('steps-list');
+    if (!list) return;
+    if (RF.steps.length === 0) {
+        list.innerHTML = `<div style="padding:6px 0 10px;color:var(--hint);font-size:13px">
+            Шаги не обязательны, но помогут вспомнить рецепт
+        </div>`;
+        return;
+    }
+    list.innerHTML = RF.steps.map((step, i) => `
+        <div class="step-row">
+            <div class="step-num">${i+1}</div>
+            <textarea class="form-input" rows="2" placeholder="Шаг ${i+1}…"
+                      oninput="RF.steps[${i}].text=this.value">${esc(step.text)}</textarea>
+            <button class="ing-del" onclick="removeStepRow(${i})" style="margin-top:10px">✕</button>
+        </div>
+    `).join('');
+}
+
+function toggleSteps(toggleEl) {
+    const body = $('steps-body');
+    const isOpen = body.classList.contains('open');
+    body.classList.toggle('open', !isOpen);
+    toggleEl.querySelector('span').textContent = (isOpen ? '▶' : '▼') + ' Шаги приготовления';
+}
+
+// ── Submit ────────────────────────────────────────────────────────────────────
+
+async function submitFullRecipe() {
+    const name = $('recipe-name-full').value.trim();
+    if (!name) {
+        toast('Введите название блюда');
+        hapticNotif('error');
+        $('recipe-name-full').classList.add('error');
+        $('recipe-name-full').focus();
+        return;
+    }
+    $('recipe-name-full').classList.remove('error');
+
+    const emoji = document.querySelector('#recipe-emoji-picker .emoji-option.selected')?.dataset.emoji || '🍽';
+    const rawTime = parseInt($('recipe-cook-time').value);
+    const cook_time_min = rawTime > 0 ? rawTime : null;
+
+    const ingredients = RF.ingredients
+        .filter(i => (i.name||'').trim())
+        .map(i => ({
+            name: i.name.trim(),
+            qty: parseFloat(i.qty) || null,
+            unit: (i.unit||'').trim(),
+        }));
+
+    const steps = RF.steps
+        .filter(s => (s.text||'').trim())
+        .map(s => ({text: s.text.trim()}));
+
+    if (S.tg?.MainButton) { S.tg.MainButton.showProgress(false); S.tg.MainButton.disable(); }
+
+    try {
+        await api(`/events/${RF.eventId}/recipes`, 'POST', {
+            name, emoji,
+            servings: RF.servings,
+            cook_time_min,
+            ingredients,
+            steps,
+            added_by_name: S.user?.first_name || 'Гость',
+        });
+        hapticNotif('success');
+        toast(`🍽 Рецепт «${name}» добавлен!`);
+
+        // Back to detail
+        if (S.currentEvent) {
+            showScreen('s-detail');
+            setBackBtn(goHome);
+            setMainBtn('Список покупок →', () => toast('Скоро: агрегация покупок'));
+            loadDetail(S.currentEvent.id);
+        } else {
+            goHome();
+        }
+    } catch(e) {
+        hapticNotif('error');
+        console.error('submitFullRecipe:', e);
+        toast(e.status === 401 ? 'Ошибка авторизации' : 'Не удалось сохранить рецепт');
+    } finally {
+        if (S.tg?.MainButton) { S.tg.MainButton.hideProgress(); S.tg.MainButton.enable(); }
+    }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

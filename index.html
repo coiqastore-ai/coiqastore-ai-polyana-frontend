@@ -752,6 +752,61 @@
     .lib-recipe-meta { font-size: 12px; color: var(--hint); }
     .stars { font-size: 12px; letter-spacing: 1px; }
     .stars .dim { opacity: .25; }
+
+    /* ── Shopping list ──────────────────────────────────────────────────────── */
+    .shop-header {
+        display: flex; align-items: center; justify-content: space-between;
+        padding: 12px 14px 8px; border-bottom: .5px solid var(--divider);
+    }
+    .shop-counter {
+        font-size: 13px; color: var(--hint);
+    }
+    .shop-sync-btn {
+        background: none; border: none; font-size: 13px;
+        color: var(--link); cursor: pointer; padding: 0;
+    }
+    .shop-category {
+        padding: 8px 14px 2px;
+        font-size: 11px; font-weight: 700; color: var(--hint);
+        text-transform: uppercase; letter-spacing: .5px;
+    }
+    .shop-item {
+        display: flex; align-items: center; gap: 12px;
+        padding: 11px 14px; border-bottom: .5px solid var(--divider);
+        cursor: pointer; transition: background .15s;
+        -webkit-tap-highlight-color: transparent;
+    }
+    .shop-item:last-child { border-bottom: none; }
+    .shop-item:active { background: var(--bg2); }
+    .shop-item.bought { opacity: .45; }
+    .shop-check {
+        width: 22px; height: 22px; border-radius: 50%;
+        border: 2px solid var(--divider); flex-shrink: 0;
+        display: flex; align-items: center; justify-content: center;
+        transition: all .2s; background: transparent;
+    }
+    .shop-item.bought .shop-check {
+        background: var(--green); border-color: var(--green);
+    }
+    .shop-check-icon { font-size: 11px; color: #fff; display: none; }
+    .shop-item.bought .shop-check-icon { display: block; }
+    .shop-item-name {
+        flex: 1; font-size: 15px;
+    }
+    .shop-item.bought .shop-item-name {
+        text-decoration: line-through;
+    }
+    .shop-item-qty {
+        font-size: 13px; color: var(--hint); flex-shrink: 0;
+    }
+    .shop-progress-bar {
+        height: 3px; background: var(--bg2); border-radius: 2px;
+        margin: 0 14px 8px; overflow: hidden;
+    }
+    .shop-progress-fill {
+        height: 100%; background: var(--green); border-radius: 2px;
+        transition: width .3s ease-out; width: 0%;
+    }
     </style>
 </head>
 <body>
@@ -1009,11 +1064,7 @@
 
         <!-- Tab: Покупки -->
         <div class="tab-content card" id="tab-shopping">
-            <div class="empty-state" style="padding:32px 24px">
-                <div class="empty-icon">🛒</div>
-                <div class="empty-title">Список покупок</div>
-                <div class="empty-sub">Появится после добавления блюд с ингредиентами</div>
-            </div>
+            <div id="shopping-list-inner"></div>
         </div>
     </div>
 </div>
@@ -1933,6 +1984,7 @@ function switchTab(name, btn) {
     switchTabByName(name);
     document.querySelectorAll('.tabs .tab').forEach(t => t.classList.remove('active'));
     btn.classList.add('active');
+    if (name === 'shopping' && S.currentEvent) loadShopping(S.currentEvent.id);
 }
 
 function switchTabByName(name) {
@@ -2298,6 +2350,143 @@ async function submitFullRecipe() {
         toast(e.status === 401 ? 'Ошибка авторизации' : 'Не удалось сохранить рецепт');
     } finally {
         if (S.tg?.MainButton) { S.tg.MainButton.hideProgress(); S.tg.MainButton.enable(); }
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SHOPPING LIST
+// ═══════════════════════════════════════════════════════════════════════════
+
+const SHOP = { items: [], total: 0, bought: 0, loading: false };
+
+async function loadShopping(eventId, silent=false) {
+    if (SHOP.loading) return;
+    SHOP.loading = true;
+    if (!silent) renderShoppingLoading();
+    try {
+        const data = await api(`/events/${eventId}/shopping`);
+        SHOP.items = data.items || [];
+        SHOP.total = data.total || 0;
+        SHOP.bought = data.bought || 0;
+        renderShopping(eventId);
+    } catch(e) {
+        console.error('loadShopping:', e);
+        $('shopping-list-inner').innerHTML = `
+            <div style="padding:24px;text-align:center;color:var(--hint);font-size:14px">
+                Не удалось загрузить список покупок
+            </div>`;
+    } finally {
+        SHOP.loading = false;
+    }
+}
+
+function renderShoppingLoading() {
+    $('shopping-list-inner').innerHTML = `
+        <div class="skeleton-row"><div class="skeleton skeleton-circle" style="width:22px;height:22px;border-radius:50%"></div>
+        <div class="skeleton-lines"><div class="skeleton skeleton-line"></div></div></div>
+        <div class="skeleton-row"><div class="skeleton skeleton-circle" style="width:22px;height:22px;border-radius:50%"></div>
+        <div class="skeleton-lines"><div class="skeleton skeleton-line"></div></div></div>
+        <div class="skeleton-row"><div class="skeleton skeleton-circle" style="width:22px;height:22px;border-radius:50%"></div>
+        <div class="skeleton-lines"><div class="skeleton skeleton-line"></div></div></div>
+    `;
+}
+
+function renderShopping(eventId) {
+    const inner = $('shopping-list-inner');
+    if (!inner) return;
+
+    if (SHOP.total === 0) {
+        inner.innerHTML = `
+            <div class="empty-state" style="padding:32px 24px">
+                <div class="empty-icon">🛒</div>
+                <div class="empty-title">Список пуст</div>
+                <div class="empty-sub">Добавьте рецепты с ингредиентами — список сформируется автоматически</div>
+            </div>`;
+        return;
+    }
+
+    const pct = SHOP.total > 0 ? Math.round(SHOP.bought / SHOP.total * 100) : 0;
+
+    let html = `
+        <div class="shop-header">
+            <div class="shop-counter">
+                ${SHOP.bought === SHOP.total && SHOP.total > 0
+                    ? '✅ Всё куплено!'
+                    : `Куплено: <b>${SHOP.bought}</b> из <b>${SHOP.total}</b>`}
+            </div>
+            <button class="shop-sync-btn" onclick="syncShopping(${eventId})">🔄 Обновить</button>
+        </div>
+        <div class="shop-progress-bar">
+            <div class="shop-progress-fill" id="shop-pbar" style="width:${pct}%"></div>
+        </div>`;
+
+    for (const group of SHOP.items) {
+        html += `<div class="shop-category">${esc(group.name)}</div>`;
+        for (const item of group.items) {
+            const cls = item.bought ? ' bought' : '';
+            const qtyLabel = item.quantity || '';
+            html += `
+            <div class="shop-item${cls}" id="sitem-${item.id}"
+                 onclick="toggleShoppingItem(${eventId},${item.id},${!item.bought})">
+                <div class="shop-check">
+                    <span class="shop-check-icon">✓</span>
+                </div>
+                <div class="shop-item-name">${esc(item.name)}</div>
+                ${qtyLabel ? `<div class="shop-item-qty">${esc(qtyLabel)}</div>` : ''}
+            </div>`;
+        }
+    }
+
+    inner.innerHTML = html;
+}
+
+async function toggleShoppingItem(eventId, itemId, newBought) {
+    haptic('light');
+
+    // Optimistic update
+    const el = $('sitem-' + itemId);
+    if (el) {
+        el.classList.toggle('bought', newBought);
+        SHOP.bought += newBought ? 1 : -1;
+        const counter = document.querySelector('.shop-counter');
+        if (counter) {
+            if (SHOP.bought === SHOP.total) {
+                counter.innerHTML = '✅ Всё куплено!';
+                hapticNotif('success');
+            } else {
+                counter.innerHTML = `Куплено: <b>${SHOP.bought}</b> из <b>${SHOP.total}</b>`;
+            }
+        }
+        const pbar = $('shop-pbar');
+        if (pbar) pbar.style.width = Math.round(SHOP.bought / SHOP.total * 100) + '%';
+    }
+
+    // Update in SHOP.items state
+    for (const group of SHOP.items) {
+        const item = group.items.find(i => i.id === itemId);
+        if (item) { item.bought = newBought; break; }
+    }
+
+    try {
+        await api(`/events/${eventId}/shopping/${itemId}`, 'PATCH', { bought: newBought });
+    } catch {
+        // Revert on error
+        loadShopping(eventId, true);
+    }
+}
+
+async function syncShopping(eventId) {
+    haptic();
+    const btn = document.querySelector('.shop-sync-btn');
+    if (btn) { btn.textContent = '⏳'; btn.disabled = true; }
+    try {
+        await api(`/events/${eventId}/shopping/sync`, 'POST');
+        await loadShopping(eventId, true);
+        toast('Список обновлён');
+    } catch {
+        toast('Не удалось обновить список');
+    } finally {
+        if (btn) { btn.textContent = '🔄 Обновить'; btn.disabled = false; }
     }
 }
 

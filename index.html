@@ -702,6 +702,56 @@
     .mb8 { margin-bottom: 8px; }
     .mb12 { margin-bottom: 12px; }
     textarea.form-input { resize: none; min-height: 80px; }
+
+    /* ── Library (Мои рецепты) ──────────────────────────────────────────────── */
+    .lib-search {
+        position: relative; margin-bottom: 12px;
+    }
+    .lib-search-input {
+        width: 100%; padding: 11px 14px 11px 40px;
+        background: var(--bg); border: 1.5px solid var(--divider);
+        border-radius: var(--radius-sm); color: var(--text);
+        font-size: 16px; font-family: inherit;
+        outline: none; transition: border-color .15s;
+        -webkit-appearance: none; appearance: none;
+    }
+    .lib-search-input:focus { border-color: var(--green); }
+    .lib-search-icon {
+        position: absolute; left: 12px; top: 50%;
+        transform: translateY(-50%); font-size: 16px;
+        pointer-events: none;
+    }
+    .cat-chips {
+        display: flex; gap: 6px; overflow-x: auto;
+        padding-bottom: 4px; margin-bottom: 12px;
+        scrollbar-width: none;
+    }
+    .cat-chips::-webkit-scrollbar { display: none; }
+    .cat-chip {
+        background: var(--bg); border: 1.5px solid var(--divider);
+        border-radius: 20px; padding: 6px 14px;
+        font-size: 13px; font-weight: 500; cursor: pointer;
+        color: var(--text); white-space: nowrap; flex-shrink: 0;
+        transition: all .15s;
+    }
+    .cat-chip.active { background: var(--green); color: #fff; border-color: var(--green); }
+    .cat-chip:active { transform: scale(.96); }
+    .lib-recipe-card {
+        display: flex; align-items: center; gap: 12px;
+        padding: 13px 14px; border-bottom: .5px solid var(--divider);
+        cursor: pointer; transition: background .15s;
+    }
+    .lib-recipe-card:last-child { border-bottom: none; }
+    .lib-recipe-card:active { background: var(--bg2); }
+    .lib-recipe-emoji { font-size: 28px; flex-shrink: 0; }
+    .lib-recipe-info { flex: 1; min-width: 0; }
+    .lib-recipe-name {
+        font-size: 15px; font-weight: 600; margin-bottom: 2px;
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .lib-recipe-meta { font-size: 12px; color: var(--hint); }
+    .stars { font-size: 12px; letter-spacing: 1px; }
+    .stars .dim { opacity: .25; }
     </style>
 </head>
 <body>
@@ -770,9 +820,9 @@
                 <span class="quick-btn-icon">➕</span>
                 <span class="quick-btn-label">Событие</span>
             </button>
-            <button class="quick-btn" disabled title="Скоро">
-                <span class="quick-btn-icon">📥</span>
-                <span class="quick-btn-label">Импорт</span>
+            <button class="quick-btn" onclick="goRecipes()">
+                <span class="quick-btn-icon">📖</span>
+                <span class="quick-btn-label">Рецепты</span>
             </button>
             <button class="quick-btn" disabled title="Скоро">
                 <span class="quick-btn-icon">🛒</span>
@@ -1055,6 +1105,43 @@
             <a id="shared-open-btn" href="#" class="btn btn-green">🌿 Открыть в боте</a>
         </div>
     </div>
+</div>
+
+<!-- ══ SCREEN: My Recipes Library ═══════════════════════════════════════════ -->
+<div id="s-recipes" class="screen">
+    <div class="page">
+        <!-- Header -->
+        <div class="detail-header">
+            <button class="detail-back" onclick="goHome()" aria-label="Назад">←</button>
+            <div class="detail-title">Мои рецепты</div>
+            <div id="lib-count-badge" style="font-size:13px;color:var(--hint);flex-shrink:0"></div>
+        </div>
+
+        <!-- Search -->
+        <div class="lib-search">
+            <span class="lib-search-icon">🔍</span>
+            <input class="lib-search-input" id="lib-search" type="search"
+                   placeholder="Поиск рецептов…" autocomplete="off"
+                   oninput="debouncedLibSearch()">
+        </div>
+
+        <!-- Category chips -->
+        <div class="cat-chips" id="cat-chips">
+            <button class="cat-chip active" data-cat="" onclick="libFilterCat(this)">Все</button>
+            <button class="cat-chip" data-cat="ужин" onclick="libFilterCat(this)">🍽 Ужин</button>
+            <button class="cat-chip" data-cat="завтрак" onclick="libFilterCat(this)">🌅 Завтрак</button>
+            <button class="cat-chip" data-cat="десерт" onclick="libFilterCat(this)">🍰 Десерт</button>
+            <button class="cat-chip" data-cat="суп" onclick="libFilterCat(this)">🍲 Суп</button>
+            <button class="cat-chip" data-cat="закуска" onclick="libFilterCat(this)">🥗 Закуска</button>
+        </div>
+
+        <!-- Recipe list -->
+        <div class="card" id="lib-list-wrap">
+            <div id="lib-list"></div>
+        </div>
+    </div>
+    <!-- FAB: add recipe -->
+    <button class="fab" onclick="openLibAddRecipe()" aria-label="Добавить рецепт">＋</button>
 </div>
 
 <!-- ══ Overlays ═══════════════════════════════════════════════════════════ -->
@@ -2211,6 +2298,256 @@ async function submitFullRecipe() {
         toast(e.status === 401 ? 'Ошибка авторизации' : 'Не удалось сохранить рецепт');
     } finally {
         if (S.tg?.MainButton) { S.tg.MainButton.hideProgress(); S.tg.MainButton.enable(); }
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// MY RECIPES LIBRARY SCREEN
+// ═══════════════════════════════════════════════════════════════════════════
+
+const LIB = { recipes: [], q: '', category: '', loading: false };
+
+function goRecipes() {
+    haptic();
+    showScreen('s-recipes');
+    setBackBtn(goHome);
+    hideMainBtn();
+    // Reset search + category
+    $('lib-search').value = '';
+    LIB.q = '';
+    LIB.category = '';
+    document.querySelectorAll('.cat-chip').forEach(c =>
+        c.classList.toggle('active', c.dataset.cat === '')
+    );
+    loadLibRecipes();
+}
+
+async function loadLibRecipes() {
+    if (LIB.loading) return;
+    LIB.loading = true;
+
+    // Show skeleton
+    $('lib-list').innerHTML = `
+        <div class="skeleton-row"><div class="skeleton skeleton-circle"></div>
+        <div class="skeleton-lines"><div class="skeleton skeleton-line"></div>
+        <div class="skeleton skeleton-line short"></div></div></div>
+        <div class="skeleton-row"><div class="skeleton skeleton-circle"></div>
+        <div class="skeleton-lines"><div class="skeleton skeleton-line"></div>
+        <div class="skeleton skeleton-line short"></div></div></div>
+        <div class="skeleton-row"><div class="skeleton skeleton-circle"></div>
+        <div class="skeleton-lines"><div class="skeleton skeleton-line"></div>
+        <div class="skeleton skeleton-line short"></div></div></div>
+    `;
+
+    try {
+        const params = new URLSearchParams();
+        if (LIB.q) params.set('q', LIB.q);
+        if (LIB.category) params.set('category', LIB.category);
+        const qs = params.toString();
+        const data = await api('/recipes' + (qs ? '?' + qs : ''));
+        LIB.recipes = data.recipes || [];
+        renderLibRecipes();
+    } catch(e) {
+        console.error('loadLibRecipes:', e);
+        $('lib-list').innerHTML = `
+            <div style="padding:24px;text-align:center;color:var(--hint);font-size:14px">
+                Не удалось загрузить рецепты
+            </div>`;
+    } finally {
+        LIB.loading = false;
+    }
+}
+
+function renderLibRecipes() {
+    const count = LIB.recipes.length;
+    $('lib-count-badge').textContent = count ? count + ' рец.' : '';
+
+    if (count === 0) {
+        const isEmpty = !LIB.q && !LIB.category;
+        $('lib-list').innerHTML = `
+            <div class="empty-state" style="padding:40px 24px">
+                <div class="empty-icon">${isEmpty ? '📖' : '🔍'}</div>
+                <div class="empty-title">${isEmpty ? 'Библиотека пуста' : 'Ничего не найдено'}</div>
+                <div class="empty-sub">${isEmpty
+                    ? 'Отправь боту ссылку на рецепт или добавь вручную'
+                    : 'Попробуйте другой запрос'}</div>
+                ${isEmpty ? `<button class="btn btn-green"
+                    style="max-width:220px;margin:0 auto"
+                    onclick="openLibAddRecipe()">＋ Добавить рецепт</button>` : ''}
+            </div>`;
+        return;
+    }
+
+    $('lib-list').innerHTML = LIB.recipes.map(r => {
+        const stars   = renderStars(r.rating);
+        const cooked  = r.times_cooked > 0
+            ? `готовил ${r.times_cooked} ${pluralTimes(r.times_cooked)}` : '';
+        const servings = r.servings ? r.servings + ' порц.' : '';
+        const ctime    = r.cook_time_minutes ? '⏱ ' + r.cook_time_minutes + ' мин.' : '';
+        const ingr     = r.ingredients_count > 0 ? '🥄 ' + r.ingredients_count + ' ингр.' : '';
+        const line1    = [stars, cooked].filter(Boolean).join(' · ');
+        const line2    = [servings, ctime, ingr].filter(Boolean).join(' · ');
+        return `
+        <div class="lib-recipe-card" onclick="viewLibRecipe(${r.id})">
+            <div class="lib-recipe-emoji">${r.emoji || '🍽'}</div>
+            <div class="lib-recipe-info">
+                <div class="lib-recipe-name">${esc(r.name)}</div>
+                ${line1 ? `<div class="lib-recipe-meta">${line1}</div>` : ''}
+                ${line2 ? `<div class="lib-recipe-meta">${line2}</div>` : ''}
+            </div>
+        </div>`;
+    }).join('');
+}
+
+function renderStars(rating) {
+    if (!rating || rating < 1) return '';
+    const full = Math.min(5, Math.round(rating));
+    return '<span class="stars">' +
+        Array.from({length: 5}, (_, i) =>
+            `<span${i >= full ? ' class="dim"' : ''}>★</span>`
+        ).join('') +
+    '</span>';
+}
+
+function pluralTimes(n) {
+    if (n % 10 === 1 && n % 100 !== 11) return 'раз';
+    if ([2,3,4].includes(n % 10) && ![12,13,14].includes(n % 100)) return 'раза';
+    return 'раз';
+}
+
+let _libSearchTimer = null;
+function debouncedLibSearch() {
+    clearTimeout(_libSearchTimer);
+    _libSearchTimer = setTimeout(() => {
+        LIB.q = $('lib-search').value.trim();
+        loadLibRecipes();
+    }, 400);
+}
+
+function libFilterCat(btn) {
+    haptic('light');
+    document.querySelectorAll('.cat-chip').forEach(c => c.classList.remove('active'));
+    btn.classList.add('active');
+    LIB.category = btn.dataset.cat;
+    loadLibRecipes();
+}
+
+function openLibAddRecipe() {
+    haptic();
+    RF.eventId = null;
+    RF.servings = 4;
+    RF.ingredients = [];
+    RF.steps = [];
+
+    $('recipe-name-full').value = '';
+    $('recipe-cook-time').value = '';
+    $('recipe-name-full').classList.remove('error');
+    $('recipe-screen-title').textContent = 'Новый рецепт';
+    $('servings-display').textContent = RF.servings;
+
+    $('recipe-emoji-picker').innerHTML = RECIPE_EMOJIS.map((em, i) =>
+        `<button class="emoji-option${i===0?' selected':''}" data-emoji="${em}"
+                 onclick="selectRecipeEmoji(this)">${em}</button>`
+    ).join('');
+
+    renderIngredients();
+    renderSteps();
+    $('steps-body').classList.remove('open');
+    const stTgl = document.querySelector('#s-recipe .collapsible-toggle span');
+    if (stTgl) stTgl.textContent = '▶ Шаги приготовления';
+
+    showScreen('s-recipe');
+    setBackBtn(() => { haptic(); goRecipesBack(); });
+    setMainBtn('💾 Сохранить в библиотеку', submitLibRecipe);
+
+    setTimeout(() => $('recipe-name-full').focus(), 350);
+}
+
+function goRecipesBack() {
+    showScreen('s-recipes');
+    setBackBtn(goHome);
+    hideMainBtn();
+}
+
+async function submitLibRecipe() {
+    const name = $('recipe-name-full').value.trim();
+    if (!name) {
+        toast('Введите название блюда');
+        hapticNotif('error');
+        $('recipe-name-full').classList.add('error');
+        $('recipe-name-full').focus();
+        return;
+    }
+    $('recipe-name-full').classList.remove('error');
+
+    const emoji = document.querySelector('#recipe-emoji-picker .emoji-option.selected')?.dataset.emoji || '🍽';
+    const rawTime = parseInt($('recipe-cook-time').value);
+    const cook_time_min = rawTime > 0 ? rawTime : null;
+
+    const ingredients = RF.ingredients
+        .filter(i => (i.name||'').trim())
+        .map(i => ({
+            name: i.name.trim(),
+            qty: parseFloat(i.qty) || null,
+            unit: (i.unit||'').trim(),
+        }));
+
+    const steps = RF.steps
+        .filter(s => (s.text||'').trim())
+        .map(s => ({text: s.text.trim()}));
+
+    if (S.tg?.MainButton) { S.tg.MainButton.showProgress(false); S.tg.MainButton.disable(); }
+
+    try {
+        await api('/recipes', 'POST', {
+            name, emoji,
+            servings: RF.servings,
+            cook_time_min,
+            ingredients,
+            steps,
+        });
+        hapticNotif('success');
+        toast('📖 «' + name + '» сохранён в библиотеку!');
+        goRecipesBack();
+        loadLibRecipes();
+    } catch(e) {
+        hapticNotif('error');
+        console.error('submitLibRecipe:', e);
+        toast(e.status === 401 ? 'Ошибка авторизации' : 'Не удалось сохранить рецепт');
+    } finally {
+        if (S.tg?.MainButton) { S.tg.MainButton.hideProgress(); S.tg.MainButton.enable(); }
+    }
+}
+
+function viewLibRecipe(id) {
+    haptic('light');
+    const r = LIB.recipes.find(x => x.id === id);
+    if (!r) return;
+    const items = [];
+    if (r.ingredients_count > 0)
+        items.push({icon:'🥄', label:r.ingredients_count + ' ингредиентов', fn:'closeSheet()'});
+    if (r.servings)
+        items.push({icon:'👥', label:r.servings + ' порций', fn:'closeSheet()'});
+    if (r.cook_time_minutes)
+        items.push({icon:'⏱', label:r.cook_time_minutes + ' минут', fn:'closeSheet()'});
+    if (r.source_url)
+        items.push({icon:'🔗', label:'Открыть источник', fn:'closeSheet();openLibUrl(' + JSON.stringify(r.source_url) + ')'});
+    items.push({icon:'🗑', label:'Удалить рецепт', fn:'closeSheet();deleteLibRecipe(' + id + ')', destructive:true});
+    openSheet((r.emoji||'🍽') + ' ' + r.name, items);
+}
+
+function openLibUrl(url) {
+    try { S.tg?.openLink?.(url) || window.open(url, '_blank'); } catch {}
+}
+
+async function deleteLibRecipe(id) {
+    LIB.recipes = LIB.recipes.filter(r => r.id !== id);
+    renderLibRecipes();
+    toast('Рецепт удалён', () => { loadLibRecipes(); }, 5000);
+    try {
+        await api('/recipes/' + id, 'DELETE');
+    } catch {
+        loadLibRecipes();
     }
 }
 

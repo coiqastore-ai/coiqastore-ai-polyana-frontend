@@ -2260,6 +2260,7 @@ const RECIPE_EMOJIS = ['🥩','🍗','🐟','🥗','🍝','🍰','🥘','🍲','
 
 function openRecipeScreen(eventId) {
     haptic();
+    RF.editId = null;
     RF.eventId = eventId;
     RF.servings = 4;
     RF.ingredients = [];
@@ -2287,6 +2288,47 @@ function openRecipeScreen(eventId) {
     showScreen('s-recipe');
     setBackBtn(cancelRecipe);
     setMainBtn('💾 Сохранить рецепт', submitFullRecipe);
+}
+
+// Open the recipe form pre-filled to EDIT the currently-viewed recipe (RDETAIL.recipe)
+function openRecipeEdit() {
+    const r = RDETAIL.recipe;
+    if (!r) return;
+    haptic();
+    RF.editId = r.id;
+    RF.editFrom = RDETAIL.from;
+    RF.eventId = null;
+    RF.servings = r.servings || 4;
+    RF.ingredients = (r.ingredients || []).map(i => ({
+        name: i.name || '', qty: (i.qty ?? '') === null ? '' : (i.qty ?? ''), unit: i.unit || ''
+    }));
+    RF.steps = (r.steps || []).map(s => ({ text: s.text || '' }));
+
+    $('recipe-name-full').value = r.name || '';
+    $('recipe-cook-time').value = r.cook_time_minutes || r.cook_time_min || '';
+    $('recipe-name-full').classList.remove('error');
+    $('recipe-screen-title').textContent = 'Редактировать рецепт';
+    $('servings-display').textContent = RF.servings;
+
+    // Emoji picker — pre-select the recipe's emoji (add it if not in the default set)
+    const cur = r.emoji || '🍽';
+    const list = RECIPE_EMOJIS.includes(cur) ? RECIPE_EMOJIS : [cur, ...RECIPE_EMOJIS];
+    $('recipe-emoji-picker').innerHTML = list.map(em =>
+        `<button class="emoji-option${em===cur?' selected':''}" data-emoji="${em}"
+                 onclick="selectRecipeEmoji(this)">${em}</button>`
+    ).join('');
+
+    renderIngredients();
+    renderSteps();
+    // Expand steps if there are any
+    const hasSteps = RF.steps.length > 0;
+    $('steps-body').classList.toggle('open', hasSteps);
+    const stTgl = document.querySelector('#s-recipe .collapsible-toggle span');
+    if (stTgl) stTgl.textContent = (hasSteps ? '▼' : '▶') + ' Шаги приготовления';
+
+    showScreen('s-recipe');
+    setBackBtn(() => { haptic(); showScreen('s-rdetail'); setBackBtn(() => { haptic(); closeRdetail(); }); });
+    setMainBtn('💾 Сохранить изменения', submitFullRecipe);
 
     setTimeout(() => $('recipe-name-full').focus(), 350);
 }
@@ -2427,25 +2469,43 @@ async function submitFullRecipe() {
     if (S.tg?.MainButton) { S.tg.MainButton.showProgress(false); S.tg.MainButton.disable(); }
 
     try {
-        await api(`/events/${RF.eventId}/recipes`, 'POST', {
-            name, emoji,
-            servings: RF.servings,
-            cook_time_min,
-            ingredients,
-            steps,
-            added_by_name: S.user?.first_name || 'Гость',
-        });
-        hapticNotif('success');
-        toast(`🍽 Рецепт «${name}» добавлен!`);
-
-        // Back to detail
-        if (S.currentEvent) {
-            showScreen('s-detail');
-            setBackBtn(goHome);
-            setMainBtn('Список покупок →', () => toast('Скоро: агрегация покупок'));
-            loadDetail(S.currentEvent.id);
+        if (RF.editId) {
+            // EDIT existing recipe
+            await api(`/recipes/${RF.editId}`, 'PATCH', {
+                name, emoji,
+                servings: RF.servings,
+                cook_time_min,
+                ingredients,
+                steps,
+            });
+            hapticNotif('success');
+            toast('✅ Рецепт обновлён');
+            const editedId = RF.editId;
+            RF.editId = null;
+            // Reopen the detail screen with fresh data
+            await openRecipeDetail(editedId, RF.editFrom || 'library');
         } else {
-            goHome();
+            // CREATE new recipe linked to event
+            await api(`/events/${RF.eventId}/recipes`, 'POST', {
+                name, emoji,
+                servings: RF.servings,
+                cook_time_min,
+                ingredients,
+                steps,
+                added_by_name: S.user?.first_name || 'Гость',
+            });
+            hapticNotif('success');
+            toast(`🍽 Рецепт «${name}» добавлен!`);
+
+            // Back to detail
+            if (S.currentEvent) {
+                showScreen('s-detail');
+                setBackBtn(goHome);
+                setMainBtn('Список покупок →', () => toast('Скоро: агрегация покупок'));
+                loadDetail(S.currentEvent.id);
+            } else {
+                goHome();
+            }
         }
     } catch(e) {
         hapticNotif('error');
@@ -2584,9 +2644,10 @@ function renderRdetail(r) {
         }
         html += `</div>`;
     } else {
-        html += `<div class="card" style="padding:18px 14px;text-align:center;
-                      color:var(--hint);font-size:14px;margin-bottom:10px">
-            Ингредиенты не добавлены
+        html += `<div class="card" style="padding:18px 14px;text-align:center;margin-bottom:10px">
+            <div style="color:var(--hint);font-size:14px;margin-bottom:12px">Ингредиенты не добавлены</div>
+            <button class="btn btn-outline btn-sm" style="width:auto;padding:9px 20px;margin:0 auto"
+                    onclick="openRecipeEdit()">＋ Добавить ингредиенты</button>
         </div>`;
     }
 
@@ -2619,6 +2680,7 @@ function openRdetailMenu() {
     if (!r) return;
     haptic();
     const items = [];
+    items.push({icon:'✏️', label:'Редактировать рецепт', fn:`closeSheet();openRecipeEdit()`});
     if (r.source_url) {
         const safe = r.source_url.replace(/'/g, '%27');
         items.push({icon:'🔗', label:'Открыть источник', fn:`closeSheet();openLibUrl('${safe}')`});

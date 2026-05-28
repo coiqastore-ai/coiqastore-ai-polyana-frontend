@@ -1106,7 +1106,6 @@
         <!-- Ingredients -->
         <div class="section-header" style="margin-top:20px">
             <span class="section-title">Ингредиенты</span>
-            <button class="section-action" style="border:none;background:none;cursor:pointer" onclick="addIngredientRow()">＋ Добавить</button>
         </div>
         <div style="background:var(--bg2);border-radius:4px;padding:4px 12px 2px;margin-bottom:4px">
             <div style="display:flex;gap:6px;font-size:11px;font-weight:600;color:var(--hint);text-transform:uppercase;letter-spacing:.3px">
@@ -1118,7 +1117,7 @@
         </div>
         <div class="card" id="ingredients-list">
             <div id="ing-empty" style="padding:16px;text-align:center;color:var(--hint);font-size:14px">
-                Нажмите «＋ Добавить», чтобы внести ингредиенты
+                Нажмите «＋ Ингредиент», чтобы добавить
             </div>
         </div>
         <button class="btn btn-outline btn-sm" onclick="addIngredientRow()" style="margin-top:8px;width:auto;padding:9px 20px">
@@ -1143,6 +1142,32 @@
         </div>
 
         <div style="height:28px"></div>
+    </div>
+</div>
+
+<!-- ══ SCREEN: Pick recipe from library ═════════════════════════════════════ -->
+<div id="s-pick-recipe" class="screen">
+    <div class="page">
+        <div class="detail-header">
+            <button class="detail-back" onclick="closePicker()" aria-label="Назад">←</button>
+            <div class="detail-title">Из библиотеки</div>
+        </div>
+        <div class="lib-search">
+            <span class="lib-search-icon">🔍</span>
+            <input class="lib-search-input" id="picker-search" type="search"
+                   placeholder="Поиск рецептов…" autocomplete="off"
+                   oninput="debouncedPickerSearch()">
+        </div>
+        <div class="card" id="picker-list-wrap">
+            <div id="picker-list"></div>
+        </div>
+        <div style="padding:16px 0 0;text-align:center">
+            <button class="btn btn-outline btn-sm"
+                    style="width:auto;padding:10px 28px"
+                    onclick="closePicker();openRecipeScreen(PICKER.eventId)">
+                ✨ Создать новый рецепт
+            </button>
+        </div>
     </div>
 </div>
 
@@ -1378,7 +1403,12 @@ function closeSheet() {
 }
 
 function openAddRecipe() {
-    if (S.currentEvent) openRecipeScreen(S.currentEvent.id);
+    if (!S.currentEvent) return;
+    haptic();
+    openSheet('Добавить рецепт', [
+        {icon: '📚', label: 'Из библиотеки', fn: 'closeSheet();openLibraryPicker(' + S.currentEvent.id + ')'},
+        {icon: '✨', label: 'Новый рецепт',   fn: 'closeSheet();openRecipeScreen(' + S.currentEvent.id + ')'},
+    ]);
 }
 
 function selectEmoji(el) {
@@ -2350,6 +2380,116 @@ async function submitFullRecipe() {
         toast(e.status === 401 ? 'Ошибка авторизации' : 'Не удалось сохранить рецепт');
     } finally {
         if (S.tg?.MainButton) { S.tg.MainButton.hideProgress(); S.tg.MainButton.enable(); }
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// LIBRARY PICKER (add recipe from library to event)
+// ═══════════════════════════════════════════════════════════════════════════
+
+const PICKER = { eventId: null, recipes: [], q: '', loading: false };
+
+function openLibraryPicker(eventId) {
+    haptic();
+    PICKER.eventId = eventId;
+    PICKER.q = '';
+    $('picker-search').value = '';
+    showScreen('s-pick-recipe');
+    setBackBtn(() => { haptic(); closePicker(); });
+    hideMainBtn();
+    loadPickerRecipes();
+}
+
+function closePicker() {
+    showScreen('s-detail');
+    setBackBtn(goHome);
+    hideMainBtn();
+}
+
+async function loadPickerRecipes() {
+    if (PICKER.loading) return;
+    PICKER.loading = true;
+    $('picker-list').innerHTML = `
+        <div class="skeleton-row"><div class="skeleton skeleton-circle"></div>
+        <div class="skeleton-lines"><div class="skeleton skeleton-line"></div>
+        <div class="skeleton skeleton-line short"></div></div></div>
+        <div class="skeleton-row"><div class="skeleton skeleton-circle"></div>
+        <div class="skeleton-lines"><div class="skeleton skeleton-line"></div>
+        <div class="skeleton skeleton-line short"></div></div></div>
+        <div class="skeleton-row"><div class="skeleton skeleton-circle"></div>
+        <div class="skeleton-lines"><div class="skeleton skeleton-line"></div>
+        <div class="skeleton skeleton-line short"></div></div></div>
+    `;
+    try {
+        const qs = PICKER.q ? '?q=' + encodeURIComponent(PICKER.q) : '';
+        const data = await api('/recipes' + qs);
+        PICKER.recipes = data.recipes || [];
+        renderPickerRecipes();
+    } catch(e) {
+        $('picker-list').innerHTML = `<div style="padding:24px;text-align:center;color:var(--hint);font-size:14px">Не удалось загрузить</div>`;
+    } finally {
+        PICKER.loading = false;
+    }
+}
+
+function renderPickerRecipes() {
+    if (PICKER.recipes.length === 0) {
+        $('picker-list').innerHTML = `
+            <div class="empty-state" style="padding:36px 24px">
+                <div class="empty-icon">${PICKER.q ? '🔍' : '📖'}</div>
+                <div class="empty-title">${PICKER.q ? 'Ничего не найдено' : 'Библиотека пуста'}</div>
+                <div class="empty-sub">${PICKER.q ? 'Попробуйте другой запрос' : 'Сначала добавьте рецепты через бота или кнопку ниже'}</div>
+            </div>`;
+        return;
+    }
+
+    $('picker-list').innerHTML = PICKER.recipes.map(r => {
+        const parts = [];
+        if (r.servings) parts.push(r.servings + ' порц.');
+        if (r.cook_time_minutes) parts.push('⏱ ' + r.cook_time_minutes + ' мин.');
+        if (r.ingredients_count > 0) parts.push('🥄 ' + r.ingredients_count + ' ингр.');
+        const meta = parts.join(' · ');
+        const safeName = esc(r.name).replace(/'/g, '&#39;');
+        return `
+        <div class="lib-recipe-card" style="padding-right:10px">
+            <div class="lib-recipe-emoji">${r.emoji || '🍽'}</div>
+            <div class="lib-recipe-info">
+                <div class="lib-recipe-name">${esc(r.name)}</div>
+                ${meta ? '<div class="lib-recipe-meta">' + meta + '</div>' : ''}
+            </div>
+            <button onclick="pickAndAdd(${PICKER.eventId},${r.id},'${safeName}')"
+                    style="flex-shrink:0;background:var(--green);color:#fff;border:none;
+                           border-radius:10px;padding:8px 16px;font-size:15px;font-weight:700;
+                           cursor:pointer;line-height:1">
+                ＋
+            </button>
+        </div>`;
+    }).join('');
+}
+
+let _pickerTimer = null;
+function debouncedPickerSearch() {
+    clearTimeout(_pickerTimer);
+    _pickerTimer = setTimeout(() => {
+        PICKER.q = $('picker-search').value.trim();
+        loadPickerRecipes();
+    }, 400);
+}
+
+async function pickAndAdd(eventId, recipeId, recipeName) {
+    haptic();
+    try {
+        await api('/events/' + eventId + '/recipes', 'POST', { recipe_id: recipeId });
+        hapticNotif('success');
+        toast('🍽 «' + recipeName + '» добавлен!');
+        closePicker();
+        loadDetail(eventId);
+    } catch(e) {
+        if (e.status === 409 || (e.message||'').includes('conflict')) {
+            toast('Этот рецепт уже есть в событии');
+        } else {
+            toast('Не удалось добавить рецепт');
+        }
     }
 }
 

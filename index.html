@@ -845,6 +845,36 @@
     .shop-item-qty {
         font-size: 13px; color: var(--hint); flex-shrink: 0;
     }
+    .shop-del-btn {
+        background: none; border: none; padding: 4px 6px;
+        color: var(--hint); font-size: 14px; cursor: pointer;
+        line-height: 1; flex-shrink: 0; opacity: 0.6;
+        border-radius: 6px;
+    }
+    .shop-del-btn:active { opacity: 1; color: #e53935; }
+    .shop-add-row {
+        display: flex; align-items: center; gap: 8px;
+        padding: 10px 14px; border-top: 1px solid var(--divider);
+        background: var(--bg);
+    }
+    .shop-add-input {
+        flex: 1; border: none; background: var(--bg2);
+        border-radius: 8px; padding: 8px 12px;
+        font-size: 15px; color: var(--text); outline: none;
+    }
+    .shop-add-qty {
+        width: 70px; border: none; background: var(--bg2);
+        border-radius: 8px; padding: 8px 10px;
+        font-size: 15px; color: var(--text); outline: none;
+    }
+    .shop-add-btn {
+        background: var(--btn); color: var(--btn-text);
+        border: none; border-radius: 8px;
+        width: 36px; height: 36px; font-size: 20px;
+        line-height: 1; cursor: pointer; flex-shrink: 0;
+        display: flex; align-items: center; justify-content: center;
+    }
+    .shop-add-btn:active { opacity: .75; }
     .shop-progress-bar {
         height: 3px; background: var(--bg2); border-radius: 2px;
         margin: 0 14px 8px; overflow: hidden;
@@ -2755,19 +2785,12 @@ function renderShopping(eventId) {
     const inner = $('shopping-list-inner');
     if (!inner) return;
 
-    if (SHOP.total === 0) {
-        inner.innerHTML = `
-            <div class="empty-state" style="padding:32px 24px">
-                <div class="empty-icon">🛒</div>
-                <div class="empty-title">Список пуст</div>
-                <div class="empty-sub">Добавьте рецепты с ингредиентами — список сформируется автоматически</div>
-            </div>`;
-        return;
-    }
-
     const pct = SHOP.total > 0 ? Math.round(SHOP.bought / SHOP.total * 100) : 0;
 
-    let html = `
+    let html = '';
+
+    if (SHOP.total > 0) {
+        html += `
         <div class="shop-header">
             <div class="shop-counter">
                 ${SHOP.bought === SHOP.total && SHOP.total > 0
@@ -2780,24 +2803,44 @@ function renderShopping(eventId) {
             <div class="shop-progress-fill" id="shop-pbar" style="width:${pct}%"></div>
         </div>`;
 
-    for (const group of SHOP.items) {
-        html += `<div class="shop-category">${esc(group.name)}</div>`;
-        for (const item of group.items) {
-            const cls = item.bought ? ' bought' : '';
-            const qtyLabel = item.quantity || '';
-            html += `
-            <div class="shop-item${cls}" id="sitem-${item.id}"
-                 onclick="toggleShoppingItem(${eventId},${item.id},${!item.bought})">
-                <div class="shop-check">
-                    <span class="shop-check-icon">✓</span>
-                </div>
-                <div class="shop-item-name">${esc(item.name)}</div>
-                ${qtyLabel ? `<div class="shop-item-qty">${esc(qtyLabel)}</div>` : ''}
-            </div>`;
+        for (const group of SHOP.items) {
+            html += `<div class="shop-category">${esc(group.name)}</div>`;
+            for (const item of group.items) {
+                const cls = item.bought ? ' bought' : '';
+                const qtyLabel = item.quantity || '';
+                const isManual = !item.is_generated;
+                html += `
+                <div class="shop-item${cls}" id="sitem-${item.id}">
+                    <div class="shop-check" onclick="toggleShoppingItem(${eventId},${item.id},${!item.bought})">
+                        <span class="shop-check-icon">✓</span>
+                    </div>
+                    <div class="shop-item-name" onclick="toggleShoppingItem(${eventId},${item.id},${!item.bought})">${esc(item.name)}</div>
+                    ${qtyLabel ? `<div class="shop-item-qty">${esc(qtyLabel)}</div>` : ''}
+                    ${isManual ? `<button class="shop-del-btn" onclick="deleteShoppingItem(${eventId},${item.id})" aria-label="Удалить">✕</button>` : ''}
+                </div>`;
+            }
         }
+    } else {
+        html += `
+            <div class="empty-state" style="padding:24px 24px 12px">
+                <div class="empty-icon">🛒</div>
+                <div class="empty-title">Список пуст</div>
+                <div class="empty-sub">Добавьте рецепты с ингредиентами или добавьте позиции вручную</div>
+            </div>`;
     }
 
+    // Manual add form — always visible
+    html += `
+    <div class="shop-add-row" id="shop-add-row">
+        <input id="shop-add-name" class="shop-add-input" placeholder="Добавить позицию…" maxlength="80"
+               onkeydown="if(event.key==='Enter')addCustomShoppingItem(${eventId})">
+        <input id="shop-add-qty" class="shop-add-qty" placeholder="кол-во" maxlength="20"
+               onkeydown="if(event.key==='Enter')addCustomShoppingItem(${eventId})">
+        <button class="shop-add-btn" onclick="addCustomShoppingItem(${eventId})">＋</button>
+    </div>`;
+
     inner.innerHTML = html;
+    // Focus if user tapped the add area
 }
 
 async function toggleShoppingItem(eventId, itemId, newBought) {
@@ -2847,6 +2890,39 @@ async function syncShopping(eventId) {
         toast('Не удалось обновить список');
     } finally {
         if (btn) { btn.textContent = '🔄 Обновить'; btn.disabled = false; }
+    }
+}
+
+async function addCustomShoppingItem(eventId) {
+    const nameEl = $('shop-add-name');
+    const qtyEl  = $('shop-add-qty');
+    const name   = (nameEl?.value || '').trim();
+    if (!name) { nameEl?.focus(); return; }
+    haptic('light');
+    const qty = (qtyEl?.value || '').trim();
+    // Optimistic clear
+    if (nameEl) nameEl.value = '';
+    if (qtyEl)  qtyEl.value  = '';
+    try {
+        await api(`/events/${eventId}/shopping`, 'POST', { name, quantity: qty || null });
+        await loadShopping(eventId, true);
+    } catch {
+        toast('Не удалось добавить');
+        if (nameEl) nameEl.value = name;
+    }
+}
+
+async function deleteShoppingItem(eventId, itemId) {
+    haptic('light');
+    // Optimistic: hide row
+    const el = $('sitem-' + itemId);
+    if (el) el.style.opacity = '0.3';
+    try {
+        await api(`/events/${eventId}/shopping/${itemId}`, 'DELETE');
+        await loadShopping(eventId, true);
+    } catch {
+        toast('Не удалось удалить');
+        if (el) el.style.opacity = '';
     }
 }
 

@@ -756,6 +756,11 @@
     .stars .dim { opacity: .25; }
 
     /* ── Recipe detail screen ──────────────────────────────────────────────── */
+    .rdetail-photo {
+        width: 100%; height: 200px; border-radius: 14px; overflow: hidden;
+        margin-bottom: 12px; background: var(--bg2);
+    }
+    .rdetail-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
     .rdetail-hero {
         text-align: center; padding: 20px 16px 12px;
     }
@@ -2576,25 +2581,39 @@ function renderRdetail(r) {
     if (r.cook_time_minutes) badges.push('⏱ ' + r.cook_time_minutes + ' мин.');
     if (r.times_cooked > 0)  badges.push('👨‍🍳 готовил ' + r.times_cooked + ' раз');
 
-    let html = `
+    let html = '';
+
+    // Photo banner (imported from a Telegram photo)
+    if (r.source_photo_file_id) {
+        html += `
+        <div class="rdetail-photo">
+            <img src="${API}/files/photo/${encodeURIComponent(r.source_photo_file_id)}" alt=""
+                 onerror="this.closest('.rdetail-photo').style.display='none'">
+        </div>`;
+    }
+
+    html += `
         <div class="rdetail-hero">
-            <span class="rdetail-emoji">${r.emoji || '🍽'}</span>
+            ${r.source_photo_file_id ? '' : `<span class="rdetail-emoji">${r.emoji || '🍽'}</span>`}
             <div class="rdetail-name">${esc(r.name)}</div>
             <div class="rdetail-badges">
                 ${badges.map(b => `<span class="rdetail-badge">${esc(b)}</span>`).join('')}
             </div>
         </div>`;
 
-    // Source link
+    // Source link — show the original site's domain
     if (r.source_url) {
         const safeUrl = r.source_url.replace(/'/g, '%27');
+        let domain = '';
+        try { domain = new URL(r.source_url).hostname.replace(/^www\./, ''); } catch {}
+        const label = domain ? `🔗 Оригинал: ${esc(domain)}` : '🔗 Открыть оригинал';
         html += `
         <div style="padding:0 14px 12px">
             <button onclick="openLibUrl('${safeUrl}')"
                 style="background:none;border:1px solid var(--divider);border-radius:8px;
                        padding:9px 14px;font-size:13px;color:var(--link);cursor:pointer;width:100%;
                        text-overflow:ellipsis;overflow:hidden;white-space:nowrap">
-                🔗 Открыть источник
+                ${label}
             </button>
         </div>`;
     }

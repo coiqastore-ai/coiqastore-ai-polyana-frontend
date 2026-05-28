@@ -2702,6 +2702,11 @@ function openRdetailMenu() {
     haptic();
     const items = [];
     items.push({icon:'✏️', label:'Редактировать рецепт', fn:`closeSheet();openRecipeEdit()`});
+    // Offer auto-recognition only if some ingredient has no quantity
+    const needsQty = (r.ingredients || []).some(i => i.qty == null || i.qty === '');
+    if ((r.ingredients || []).length > 0 && needsQty) {
+        items.push({icon:'✨', label:'Распознать количества', fn:`closeSheet();normalizeRecipeIngredients()`});
+    }
     if (r.source_url) {
         const safe = r.source_url.replace(/'/g, '%27');
         items.push({icon:'🔗', label:'Открыть источник', fn:`closeSheet();openLibUrl('${safe}')`});
@@ -2714,6 +2719,21 @@ function openRdetailMenu() {
             fn:`closeSheet();deleteLibRecipe(${r.id})`, destructive:true});
     }
     openSheet((r.emoji || '🍽') + ' ' + r.name, items);
+}
+
+async function normalizeRecipeIngredients() {
+    const r = RDETAIL.recipe;
+    if (!r) return;
+    haptic();
+    toast('✨ Распознаю количества…');
+    try {
+        await api(`/recipes/${r.id}/normalize-ingredients`, 'POST');
+        await openRecipeDetail(r.id, RDETAIL.from);   // reload with fresh data
+        hapticNotif('success');
+    } catch(e) {
+        hapticNotif('error');
+        toast('Не удалось распознать количества');
+    }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

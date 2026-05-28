@@ -2509,12 +2509,27 @@ function renderRdetail(r) {
 
     // Ingredients
     if (r.ingredients && r.ingredients.length > 0) {
+        // Merge duplicate ingredient names (same name + unit → sum qty)
+        const mergeMap = new Map();
+        for (const ing of r.ingredients) {
+            const key = (ing.name || '').toLowerCase().trim()
+                      + '|' + (ing.unit || '').toLowerCase().trim();
+            if (mergeMap.has(key)) {
+                const ex = mergeMap.get(key);
+                if (ex.qty != null && ing.qty != null) ex.qty += ing.qty;
+                else if (ex.qty == null && ing.qty != null) ex.qty = ing.qty;
+            } else {
+                mergeMap.set(key, {...ing});
+            }
+        }
+        const ingredients = [...mergeMap.values()];
+
         // Group by category
         const groups = {};
         const catOrder = ['мясо','рыба','овощи','фрукты','молочное','яйца','крупы',
                           'мука','масло','соусы','специи','орехи','сахар','консервы',
                           'хлеб','грибы','напитки','прочее'];
-        for (const ing of r.ingredients) {
+        for (const ing of ingredients) {
             const cat = ing.category || 'прочее';
             (groups[cat] = groups[cat] || []).push(ing);
         }
@@ -2524,7 +2539,7 @@ function renderRdetail(r) {
         const multiCat = sortedCats.length > 1;
 
         html += `<div class="card" style="margin-bottom:10px">
-            <div class="rdetail-section-title">🥄 Ингредиенты · ${r.ingredients.length}</div>`;
+            <div class="rdetail-section-title">🥄 Ингредиенты · ${ingredients.length}</div>`;
         for (const cat of sortedCats) {
             if (multiCat) html += `<div class="rdetail-cat-label">${esc(cat)}</div>`;
             for (const ing of groups[cat]) {

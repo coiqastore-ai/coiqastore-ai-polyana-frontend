@@ -1436,22 +1436,34 @@ function hapticNotif(type='success') {
 // ═══════════════════════════════════════════════════════════════════════════
 // API
 // ═══════════════════════════════════════════════════════════════════════════
-async function api(path, method='GET', body=null) {
+async function api(path, method='GET', body=null, timeoutMs=20000) {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), timeoutMs);
     const opts = {
         method,
         headers: {
             'Content-Type': 'application/json',
             'X-Telegram-Init-Data': S.initData,
         },
+        signal: ctrl.signal,
     };
     if (body) opts.body = JSON.stringify(body);
-    const r = await fetch(API + path, opts);
-    if (!r.ok) {
-        const msg = await r.text().catch(()=>'');
-        throw Object.assign(new Error(msg||`HTTP ${r.status}`), {status: r.status});
+    try {
+        const r = await fetch(API + path, opts);
+        if (!r.ok) {
+            const msg = await r.text().catch(()=>'');
+            throw Object.assign(new Error(msg||`HTTP ${r.status}`), {status: r.status});
+        }
+        if (r.status === 204) return null;
+        return r.json();
+    } catch (e) {
+        if (e.name === 'AbortError') {
+            throw Object.assign(new Error('Превышено время ожидания'), {status: 0, timeout: true});
+        }
+        throw e;
+    } finally {
+        clearTimeout(timer);
     }
-    if (r.status === 204) return null;
-    return r.json();
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

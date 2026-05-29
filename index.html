@@ -3021,8 +3021,8 @@ async function addCustomShoppingItem(eventId) {
     try {
         await api(`/events/${eventId}/shopping`, 'POST', { name, quantity: qty || null });
         await loadShopping(eventId, true);
-    } catch {
-        toast('Не удалось добавить');
+    } catch (e) {
+        toast(e && e.message ? ('Не удалось добавить: ' + e.message) : 'Не удалось добавить');
         if (nameEl) nameEl.value = name;
     }
 }

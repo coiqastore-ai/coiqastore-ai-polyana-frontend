@@ -2899,6 +2899,7 @@ async function loadShopping(eventId, silent=false) {
         SHOP.bought = data.bought || 0;
         SHOP.linkedRecipes = data.linked_recipes || 0;
         SHOP.ingredientRows = data.ingredient_rows || 0;
+        SHOP.genError = data.debug_gen_error || null;
         renderShopping(eventId);
     } catch(e) {
         console.error('loadShopping:', e);
@@ -2970,6 +2971,9 @@ function renderShopping(eventId) {
         } else {
             sub = `Найдено ингредиентов в рецептах: ${SHOP.ingredientRows}, но список не собрался. Нажмите «Собрать из рецептов».`;
             action = `<button class="shop-sync-btn" style="margin-top:12px" onclick="syncShopping(${eventId})">🔄 Собрать из рецептов</button>`;
+        }
+        if (SHOP.genError) {
+            action += `<div style="margin-top:12px;padding:8px;font-size:11px;color:#e66;background:rgba(255,0,0,.08);border-radius:8px;word-break:break-word">debug: ${esc(SHOP.genError)}</div>`;
         }
         html += `
             <div class="empty-state" style="padding:24px 24px 12px">

@@ -2972,9 +2972,6 @@ function renderShopping(eventId) {
             sub = `Найдено ингредиентов в рецептах: ${SHOP.ingredientRows}, но список не собрался. Нажмите «Собрать из рецептов».`;
             action = `<button class="shop-sync-btn" style="margin-top:12px" onclick="syncShopping(${eventId})">🔄 Собрать из рецептов</button>`;
         }
-        if (SHOP.genError) {
-            action += `<div style="margin-top:12px;padding:8px;font-size:11px;color:#e66;background:rgba(255,0,0,.08);border-radius:8px;word-break:break-word">debug: ${esc(SHOP.genError)}</div>`;
-        }
         html += `
             <div class="empty-state" style="padding:24px 24px 12px">
                 <div class="empty-icon">🛒</div>

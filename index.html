@@ -1595,7 +1595,7 @@ function goDetail(event) {
     showScreen('s-detail');
     renderDetail(event);
     setBackBtn(goHome);
-    setMainBtn('Список покупок →', () => toast('Скоро: агрегация покупок'));
+    setMainBtn('Список покупок →', goShoppingTab);
     // Load full detail from API
     loadDetail(event.id);
 }
@@ -2120,6 +2120,16 @@ function switchTab(name, btn) {
     if (name === 'shopping' && S.currentEvent) loadShopping(S.currentEvent.id);
 }
 
+function goShoppingTab() {
+    if (!S.currentEvent) return;
+    haptic();
+    switchTabByName('shopping');
+    document.querySelectorAll('.tabs .tab').forEach(t => t.classList.remove('active'));
+    const btn = document.querySelector('.tabs .tab[onclick*="shopping"]');
+    if (btn) btn.classList.add('active');
+    loadShopping(S.currentEvent.id);
+}
+
 function switchTabByName(name) {
     S.currentTab = name;
     const map = {menu:'tab-menu', guests:'tab-guests', shopping:'tab-shopping'};
@@ -2357,7 +2367,7 @@ function cancelRecipe() {
     if (S.currentEvent) {
         showScreen('s-detail');
         setBackBtn(goHome);
-        setMainBtn('Список покупок →', () => toast('Скоро: агрегация покупок'));
+        setMainBtn('Список покупок →', goShoppingTab);
     } else {
         goHome();
     }
@@ -2520,7 +2530,7 @@ async function submitFullRecipe() {
             if (S.currentEvent) {
                 showScreen('s-detail');
                 setBackBtn(goHome);
-                setMainBtn('Список покупок →', () => toast('Скоро: агрегация покупок'));
+                setMainBtn('Список покупок →', goShoppingTab);
                 loadDetail(S.currentEvent.id);
             } else {
                 goHome();
@@ -2873,6 +2883,8 @@ async function loadShopping(eventId, silent=false) {
         SHOP.items = data.items || [];
         SHOP.total = data.total || 0;
         SHOP.bought = data.bought || 0;
+        SHOP.linkedRecipes = data.linked_recipes || 0;
+        SHOP.ingredientRows = data.ingredient_rows || 0;
         renderShopping(eventId);
     } catch(e) {
         console.error('loadShopping:', e);
@@ -2936,11 +2948,21 @@ function renderShopping(eventId) {
             }
         }
     } else {
+        let sub, action = '';
+        if ((SHOP.linkedRecipes || 0) === 0) {
+            sub = 'К событию не привязано ни одного рецепта. Добавьте блюдо во вкладке «Меню» или впишите позицию вручную ниже.';
+        } else if ((SHOP.ingredientRows || 0) === 0) {
+            sub = `Рецептов привязано: ${SHOP.linkedRecipes}, но у них не заданы ингредиенты. Откройте рецепт и добавьте ингредиенты — тогда они появятся здесь.`;
+        } else {
+            sub = `Найдено ингредиентов в рецептах: ${SHOP.ingredientRows}, но список не собрался. Нажмите «Собрать из рецептов».`;
+            action = `<button class="shop-sync-btn" style="margin-top:12px" onclick="syncShopping(${eventId})">🔄 Собрать из рецептов</button>`;
+        }
         html += `
             <div class="empty-state" style="padding:24px 24px 12px">
                 <div class="empty-icon">🛒</div>
                 <div class="empty-title">Список пуст</div>
-                <div class="empty-sub">Добавьте рецепты с ингредиентами или добавьте позиции вручную</div>
+                <div class="empty-sub">${esc(sub)}</div>
+                ${action}
             </div>`;
     }
 

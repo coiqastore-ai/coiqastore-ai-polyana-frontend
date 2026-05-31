@@ -1290,6 +1290,12 @@
             </button>
         </div>
 
+        <!-- Balance (AI mode) -->
+        <div id="inv-balance" style="display:none;align-items:center;justify-content:space-between;background:var(--bg2);border-radius:12px;padding:10px 14px;margin-bottom:14px;font-size:14px">
+            <span>Баланс: <b id="inv-balance-val">—</b></span>
+            <button class="btn btn-outline btn-sm" style="width:auto;padding:6px 16px" onclick="openTopup()">Пополнить</button>
+        </div>
+
         <!-- Theme chips -->
         <div class="cat-chips" id="inv-themes" style="margin-bottom:14px"></div>
 
@@ -2242,7 +2248,7 @@ async function inviteCollab() {
 // ═══════════════════════════════════════════════════════════════════════════
 // INVITATION GENERATOR
 // ═══════════════════════════════════════════════════════════════════════════
-const INV = { mode: 'free', theme: '', image: null, loading: false, themes: [] };
+const INV = { mode: 'free', theme: '', image: null, loading: false, themes: [], balance: 0 };
 
 async function openInviteScreen() {
     const ev = S.currentEvent;
@@ -2262,6 +2268,39 @@ async function openInviteScreen() {
         try { INV.themes = await api('/invite/themes'); } catch { INV.themes = []; }
     }
     renderInviteThemes();
+    refreshBalance();
+}
+
+async function refreshBalance() {
+    try {
+        const d = await api('/balance');
+        INV.balance = d.balance || 0;
+        $('inv-balance-val').textContent = (d.balance_rub ?? 0) + ' ₽';
+    } catch {
+        $('inv-balance-val').textContent = '—';
+    }
+}
+
+function openTopup() {
+    haptic();
+    openSheet('Пополнить баланс', [49, 149, 299, 499, 999].map(a => (
+        { icon: '💳', label: a + ' ₽', fn: `closeSheet();topUp(${a})` }
+    )));
+}
+
+async function topUp(amount) {
+    haptic();
+    try {
+        const d = await api('/balance/topup', 'POST', { amount });
+        if (d.confirmation_url) {
+            toast('Открываю оплату ЮКассы…');
+            if (S.tg?.openLink) S.tg.openLink(d.confirmation_url);
+            else window.open(d.confirmation_url, '_blank');
+        }
+    } catch (e) {
+        toast('Не удалось создать платёж: ' + (e?.message || ''));
+        hapticNotif('error');
+    }
 }
 
 function closeInvite() {
@@ -2274,6 +2313,8 @@ function setInviteMode(mode) {
     INV.mode = mode;
     $('inv-mode-free').classList.toggle('active', mode === 'free');
     $('inv-mode-ai').classList.toggle('active', mode === 'ai');
+    $('inv-balance').style.display = mode === 'ai' ? 'flex' : 'none';
+    if (mode === 'ai') refreshBalance();
 }
 
 function renderInviteThemes() {
@@ -2312,11 +2353,20 @@ async function genInvite() {
         $('inv-reroll').style.display = INV.mode === 'ai' ? '' : 'none';
         $('inv-after').style.display = 'flex';
         $('inv-gen-btn').textContent = 'Создать заново';
+        if (INV.mode === 'ai') refreshBalance();
         hapticNotif('success');
     } catch (e) {
-        $('inv-preview-empty').textContent = 'Не удалось создать: ' + (e?.message || 'ошибка');
-        $('inv-preview-empty').style.display = '';
-        hapticNotif('error');
+        if (e?.status === 402) {
+            $('inv-preview-empty').textContent = 'Недостаточно средств — пополните баланс (AI-фон стоит 49 ₽)';
+            $('inv-preview-empty').style.display = '';
+            hapticNotif('error');
+            refreshBalance();
+            openTopup();
+        } else {
+            $('inv-preview-empty').textContent = 'Не удалось создать: ' + (e?.message || 'ошибка');
+            $('inv-preview-empty').style.display = '';
+            hapticNotif('error');
+        }
     } finally {
         INV.loading = false;
         btn.disabled = false;

@@ -1816,6 +1816,7 @@ function openSettings() {
     haptic();
     openSheet('Аккаунт', [
         {icon: '👤', label: S.user ? `${S.user.first_name || ''}${S.user.username ? ' @'+S.user.username : ''}`.trim() : '—', fn: 'closeSheet()'},
+        {icon: '💰', label: 'Партнёрская программа', fn: 'closeSheet();openReferral()'},
         {icon: '📤', label: 'Поделиться ПОЛЯНОЙ', fn: 'shareApp(); closeSheet()'},
         {icon: '✕',  label: 'Закрыть', fn: 'closeSheet()'},
     ]);
@@ -1825,6 +1826,42 @@ function shareApp() {
     const link = `https://t.me/${BOT}`;
     const text = 'Попробуй ПОЛЯНУ — планировщик застолий с друзьями!';
     S.tg?.openTelegramLink?.(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(text)}`);
+}
+
+async function openReferral() {
+    haptic();
+    let d;
+    try { d = await api('/referral'); }
+    catch { toast('Не удалось загрузить партнёрскую программу'); return; }
+    const message =
+        `Приглашай друзей и получай ${d.percent}% с их трат в боте (бонусом на баланс).\n\n` +
+        `👥 Приглашено: ${d.invited}\n` +
+        `✅ Заработано: ${d.earned_rub} ₽\n` +
+        `⏳ Ждёт зачисления (24ч): ${d.pending_rub} ₽`;
+    if (S.tg?.showPopup) {
+        S.tg.showPopup({
+            title: 'Партнёрская программа',
+            message,
+            buttons: [
+                { id: 'share', type: 'default', text: 'Поделиться ссылкой' },
+                { type: 'cancel' },
+            ],
+        }, (id) => { if (id === 'share') shareReferral(d.link); });
+    } else {
+        toast(message);
+        shareReferral(d.link);
+    }
+}
+
+function shareReferral(link) {
+    if (!link) { toast('Ссылка пока недоступна'); return; }
+    const text = 'Попробуй ПОЛЯНУ — планировщик застолий с друзьями 🌿';
+    if (S.tg?.openTelegramLink) {
+        S.tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(text)}`);
+    } else {
+        navigator.clipboard?.writeText(link).catch(()=>{});
+        toast('Ссылка скопирована');
+    }
 }
 
 function pluralGuests(n) {
@@ -2283,19 +2320,46 @@ async function refreshBalance() {
 
 function openTopup() {
     haptic();
-    openSheet('Пополнить баланс', [49, 149, 299, 499, 999].map(a => (
-        { icon: '💳', label: a + ' ₽', fn: `closeSheet();topUp(${a})` }
-    )));
+    openSheet('Пополнить баланс', [
+        { icon: '💳', label: 'Банковской картой', fn: 'closeSheet();openTopupAmount("card")' },
+        { icon: '⭐', label: 'Telegram Stars', fn: 'closeSheet();openTopupAmount("stars")' },
+    ]);
 }
 
-async function topUp(amount) {
+function openTopupAmount(method) {
+    openSheet(method === 'stars' ? 'Stars — выбери сумму' : 'Картой — выбери сумму',
+        [49, 149, 299, 499, 999].map(a => (
+            { icon: '💰', label: a + ' ₽', fn: `closeSheet();topUp(${a},'${method}')` }
+        )));
+}
+
+async function topUp(amount, method = 'card') {
     haptic();
     try {
-        const d = await api('/balance/topup', 'POST', { amount });
-        if (d.confirmation_url) {
-            toast('Открываю оплату ЮКассы…');
-            if (S.tg?.openLink) S.tg.openLink(d.confirmation_url);
-            else window.open(d.confirmation_url, '_blank');
+        if (method === 'stars') {
+            const d = await api('/balance/topup-stars', 'POST', { amount });
+            if (d.invoice_link && S.tg?.openInvoice) {
+                S.tg.openInvoice(d.invoice_link, (status) => {
+                    if (status === 'paid') { toast('Оплачено! Баланс пополнен'); hapticNotif('success'); refreshBalance(); }
+                    else if (status === 'failed') { toast('Оплата не прошла'); }
+                });
+            } else {
+                toast('Stars недоступны в этой версии Telegram');
+            }
+        } else {
+            // Email for the fiscal receipt (54-ФЗ). Asked once, stored locally.
+            let email = '';
+            try { email = localStorage.getItem('polyana_email') || ''; } catch {}
+            if (!email) {
+                try { email = (window.prompt('Email для чека (необязательно):') || '').trim(); } catch {}
+                if (email) { try { localStorage.setItem('polyana_email', email); } catch {} }
+            }
+            const d = await api('/balance/topup', 'POST', { amount, email });
+            if (d.confirmation_url) {
+                toast('Открываю оплату ЮКассы…');
+                if (S.tg?.openLink) S.tg.openLink(d.confirmation_url);
+                else window.open(d.confirmation_url, '_blank');
+            }
         }
     } catch (e) {
         toast('Не удалось создать платёж: ' + (e?.message || ''));

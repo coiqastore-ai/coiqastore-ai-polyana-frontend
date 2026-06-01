@@ -1690,15 +1690,19 @@ async function loadEvents() {
 }
 
 function showHomeSkeleton() {
-    $('hero-skeleton').style.display = 'block';
-    $('hero-card').style.display = 'none';
-    $('hero-empty').style.display = 'none';
-    $('events-skeleton').style.display = 'block';
-    $('events-list').innerHTML = '';
+    // null-safe: renderHome() rewrites #events-list-wrap and removes
+    // #events-skeleton / #events-list, so on later loads these may not exist.
+    // Touching a missing node here used to throw and abort loadEvents, leaving
+    // the hero skeleton stuck (black block) until the app was reopened.
+    const hs = $('hero-skeleton'); if (hs) hs.style.display = 'block';
+    const hc = $('hero-card');     if (hc) hc.style.display = 'none';
+    const he = $('hero-empty');    if (he) he.style.display = 'none';
+    const es = $('events-skeleton'); if (es) es.style.display = 'block';
+    const el = $('events-list');     if (el) el.innerHTML = '';
 }
 
 function renderHome() {
-    $('events-skeleton').style.display = 'none';
+    const _es = $('events-skeleton'); if (_es) _es.style.display = 'none';
 
     const now = Date.now();
     const upcoming = S.events.filter(e => !e.event_date || new Date(e.event_date) >= now);

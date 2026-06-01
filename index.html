@@ -1119,6 +1119,11 @@
             <button class="invite-btn" onclick="inviteCollab()">＋ Пригласить</button>
         </div>
 
+        <!-- Create invitation image -->
+        <button class="btn btn-outline" style="margin-bottom:12px" onclick="openInviteScreen()">
+            🎨 Сделать приглашение-картинку
+        </button>
+
         <!-- Next step -->
         <div class="next-step" id="next-step-block" style="display:none">
             <span class="next-step-icon">💡</span>
@@ -2018,7 +2023,13 @@ async function submitCreate() {
     const name = $('ev-name').value.trim();
     const dateVal = $('ev-date').value;
     const timeVal = $('ev-time').value || '18:00';
-    const event_date = dateVal ? `${dateVal}T${timeVal}:00` : null;
+    // Build a timezone-correct instant: interpret the entered date/time as LOCAL,
+    // send as ISO (UTC). Avoids the +offset shift (e.g. 18:00 showing as 21:00).
+    let event_date = null;
+    if (dateVal) {
+        const dt = new Date(`${dateVal}T${timeVal}`);
+        event_date = isNaN(dt) ? `${dateVal}T${timeVal}:00` : dt.toISOString();
+    }
     const location = $('ev-location').value.trim() || null;
     const description = $('ev-desc').value.trim() || null;
     const activeTpl = document.querySelector('.tpl-btn.active')?.dataset.tpl || null;
@@ -2328,7 +2339,7 @@ function openTopup() {
 
 function openTopupAmount(method) {
     openSheet(method === 'stars' ? 'Stars — выбери сумму' : 'Картой — выбери сумму',
-        [49, 149, 299, 499, 999].map(a => (
+        [100, 200, 500, 1000].map(a => (
             { icon: '💰', label: a + ' ₽', fn: `closeSheet();topUp(${a},'${method}')` }
         )));
 }

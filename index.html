@@ -1405,6 +1405,24 @@
     </div>
 </div>
 
+<!-- Email-for-receipt sheet (card top-up, 54-ФЗ) -->
+<div id="email-sheet" class="bottom-sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-title">Email для чека</div>
+    <div style="padding:0 20px 20px">
+        <div style="font-size:13px;color:var(--hint);margin-bottom:10px">
+            На него ЮКасса пришлёт фискальный чек об оплате.
+        </div>
+        <input class="form-input" id="topup-email" type="email" inputmode="email"
+               placeholder="you@example.com" autocomplete="email" maxlength="120"
+               oninput="onEmailInput()"
+               onkeydown="if(event.key==='Enter')submitEmailTopup()">
+        <div class="form-error" id="topup-email-err" style="display:none">Введите корректный email</div>
+        <button class="btn btn-green" id="topup-email-btn" style="margin-top:16px" disabled
+                onclick="submitEmailTopup()">Продолжить к оплате</button>
+    </div>
+</div>
+
 <!-- Toast container -->
 <div class="toast-wrap">
     <div id="toast" class="toast"></div>
@@ -1576,6 +1594,7 @@ function closeSheet() {
     $('overlay').classList.remove('show');
     $('bottom-sheet').classList.remove('show');
     $('add-recipe-sheet').classList.remove('show');
+    $('email-sheet')?.classList.remove('show');
 }
 
 function openAddRecipe() {
@@ -2348,10 +2367,19 @@ function openTopupAmount(method) {
         )));
 }
 
+function isValidEmail(e) {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(e || '').trim());
+}
+function getStoredEmail() {
+    try { return localStorage.getItem('polyana_email') || ''; } catch { return ''; }
+}
+
+let _pendingTopupAmount = 0;
+
 async function topUp(amount, method = 'card') {
     haptic();
-    try {
-        if (method === 'stars') {
+    if (method === 'stars') {
+        try {
             const d = await api('/balance/topup-stars', 'POST', { amount });
             if (d.invoice_link && S.tg?.openInvoice) {
                 S.tg.openInvoice(d.invoice_link, (status) => {
@@ -2361,25 +2389,53 @@ async function topUp(amount, method = 'card') {
             } else {
                 toast('Stars недоступны в этой версии Telegram');
             }
-        } else {
-            // Email for the fiscal receipt (54-ФЗ). Asked once, stored locally.
-            let email = '';
-            try { email = localStorage.getItem('polyana_email') || ''; } catch {}
-            if (!email) {
-                try { email = (window.prompt('Email для чека (необязательно):') || '').trim(); } catch {}
-                if (email) { try { localStorage.setItem('polyana_email', email); } catch {} }
-            }
-            const d = await api('/balance/topup', 'POST', { amount, email });
-            if (d.confirmation_url) {
-                toast('Открываю оплату ЮКассы…');
-                if (S.tg?.openLink) S.tg.openLink(d.confirmation_url);
-                else window.open(d.confirmation_url, '_blank');
-            }
+        } catch (e) {
+            toast('Не удалось создать счёт: ' + (e?.message || ''));
+            hapticNotif('error');
+        }
+        return;
+    }
+    // Card: a fiscal receipt (54-ФЗ) requires the buyer's email — make it mandatory.
+    const email = getStoredEmail();
+    if (!isValidEmail(email)) { openEmailSheet(amount); return; }
+    await doCardTopup(amount, email);
+}
+
+async function doCardTopup(amount, email) {
+    try {
+        const d = await api('/balance/topup', 'POST', { amount, email });
+        if (d.confirmation_url) {
+            toast('Открываю оплату ЮКассы…');
+            if (S.tg?.openLink) S.tg.openLink(d.confirmation_url);
+            else window.open(d.confirmation_url, '_blank');
         }
     } catch (e) {
         toast('Не удалось создать платёж: ' + (e?.message || ''));
         hapticNotif('error');
     }
+}
+
+function openEmailSheet(amount) {
+    _pendingTopupAmount = amount;
+    $('topup-email').value = getStoredEmail();
+    onEmailInput();
+    $('overlay').classList.add('show');
+    $('email-sheet').classList.add('show');
+    setTimeout(() => $('topup-email').focus(), 150);
+}
+
+function onEmailInput() {
+    const v = $('topup-email').value.trim();
+    $('topup-email-btn').disabled = !isValidEmail(v);
+    $('topup-email-err').style.display = (v && !isValidEmail(v)) ? 'block' : 'none';
+}
+
+async function submitEmailTopup() {
+    const email = $('topup-email').value.trim();
+    if (!isValidEmail(email)) { onEmailInput(); return; }
+    try { localStorage.setItem('polyana_email', email); } catch {}
+    closeSheet();
+    await doCardTopup(_pendingTopupAmount, email);
 }
 
 function closeInvite() {

@@ -2282,7 +2282,7 @@ function openEventMenu() {
     if (!ev) return;
     const items = [
         {icon:'🎨', label:'Сделать приглашение', fn:'closeSheet();openInviteScreen()'},
-        {icon:'✏️', label:'Редактировать', fn:'closeSheet();toast("Редактирование — скоро")'},
+        {icon:'✏️', label:'Редактировать', fn:"closeSheet();toast('Редактирование — скоро')"},
         {icon:'🔗', label:'Пригласить гостей (ссылка)', fn:'closeSheet();inviteCollab()'},
     ];
     if (ev.is_owner !== false) {
@@ -2355,8 +2355,8 @@ async function refreshBalance() {
 function openTopup() {
     haptic();
     openSheet('Пополнить баланс', [
-        { icon: '💳', label: 'Банковской картой', fn: 'closeSheet();openTopupAmount("card")' },
-        { icon: '⭐', label: 'Telegram Stars', fn: 'closeSheet();openTopupAmount("stars")' },
+        { icon: '💳', label: 'Банковской картой', fn: "closeSheet();openTopupAmount('card')" },
+        { icon: '⭐', label: 'Telegram Stars', fn: "closeSheet();openTopupAmount('stars')" },
     ]);
 }
 

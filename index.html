@@ -3285,10 +3285,10 @@ function renderShopping(eventId) {
                 const isManual = !item.is_generated;
                 html += `
                 <div class="shop-item${cls}" id="sitem-${item.id}">
-                    <div class="shop-check" onclick="toggleShoppingItem(${eventId},${item.id},${!item.bought})">
+                    <div class="shop-check" onclick="toggleShoppingItem(${eventId},${item.id})">
                         <span class="shop-check-icon">✓</span>
                     </div>
-                    <div class="shop-item-name" onclick="toggleShoppingItem(${eventId},${item.id},${!item.bought})">${esc(item.name)}</div>
+                    <div class="shop-item-name" onclick="toggleShoppingItem(${eventId},${item.id})">${esc(item.name)}</div>
                     ${qtyLabel ? `<div class="shop-item-qty">${esc(qtyLabel)}</div>` : ''}
                     ${isManual ? `<button class="shop-del-btn" onclick="deleteShoppingItem(${eventId},${item.id})" aria-label="Удалить">✕</button>` : ''}
                 </div>`;
@@ -3327,8 +3327,17 @@ function renderShopping(eventId) {
     // Focus if user tapped the add area
 }
 
-async function toggleShoppingItem(eventId, itemId, newBought) {
+async function toggleShoppingItem(eventId, itemId) {
     haptic('light');
+
+    // Flip from CURRENT state (onclick no longer bakes a stale literal, so the
+    // checkbox toggles both ways without a full re-render).
+    let cur = false;
+    for (const group of SHOP.items) {
+        const it = group.items.find(i => i.id === itemId);
+        if (it) { cur = !!it.bought; break; }
+    }
+    const newBought = !cur;
 
     // Optimistic update
     const el = $('sitem-' + itemId);

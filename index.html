@@ -1283,24 +1283,6 @@
             <div class="detail-title">Приглашение</div>
         </div>
 
-        <!-- Mode toggle -->
-        <div style="display:flex;gap:10px;margin-bottom:14px">
-            <button id="inv-mode-free" class="inv-mode active" onclick="setInviteMode('free')">
-                <span style="font-weight:700;font-size:15px">Шаблон</span>
-                <span style="font-size:12px;color:var(--hint)">бесплатно</span>
-            </button>
-            <button id="inv-mode-ai" class="inv-mode" onclick="setInviteMode('ai')">
-                <span style="font-weight:700;font-size:15px">✨ AI-фон</span>
-                <span style="font-size:12px;color:var(--hint)">49 ₽</span>
-            </button>
-        </div>
-
-        <!-- Balance (AI mode) -->
-        <div id="inv-balance" style="display:none;align-items:center;justify-content:space-between;background:var(--bg2);border-radius:12px;padding:10px 14px;margin-bottom:14px;font-size:14px">
-            <span>Баланс: <b id="inv-balance-val">—</b></span>
-            <button class="btn btn-outline btn-sm" style="width:auto;padding:6px 16px" onclick="openTopup()">Пополнить</button>
-        </div>
-
         <!-- Theme chips -->
         <div class="cat-chips" id="inv-themes" style="margin-bottom:14px"></div>
 
@@ -1315,7 +1297,6 @@
         <!-- Actions -->
         <button class="btn btn-green" id="inv-gen-btn" onclick="genInvite()">Создать приглашение</button>
         <div id="inv-after" style="display:none;gap:10px;margin-top:10px">
-            <button id="inv-reroll" class="btn btn-outline" style="flex:1" onclick="genInvite(true)">🔄 Другой вариант</button>
             <button class="btn btn-green" style="flex:1" onclick="sendInviteToChat()">📤 В чат</button>
         </div>
     </div>
@@ -2329,7 +2310,6 @@ async function openInviteScreen() {
     setBackBtn(closeInvite);
     hideMainBtn();
     INV.mode = 'free'; INV.theme = ''; INV.image = null;
-    setInviteMode('free');
     $('inv-img').style.display = 'none';
     $('inv-preview-empty').textContent = 'Выберите оформление и нажмите «Создать»';
     $('inv-preview-empty').style.display = '';
@@ -2475,33 +2455,22 @@ async function genInvite() {
     btn.disabled = true;
     $('inv-img').style.display = 'none';
     $('inv-after').style.display = 'none';
-    $('inv-preview-empty').textContent = INV.mode === 'ai'
-        ? 'Генерируем AI-фон… это 10–25 секунд' : 'Рендерим приглашение…';
+    $('inv-preview-empty').textContent = 'Рендерим приглашение…';
     $('inv-preview-empty').style.display = '';
     try {
         const data = await api(`/events/${ev.id}/invite`, 'POST',
-            { mode: INV.mode, theme: INV.theme || null }, 120000);
+            { theme: INV.theme || null }, 60000);
         INV.image = data.image;
         $('inv-img').src = data.image;
         $('inv-img').style.display = '';
         $('inv-preview-empty').style.display = 'none';
-        $('inv-reroll').style.display = INV.mode === 'ai' ? '' : 'none';
         $('inv-after').style.display = 'flex';
         $('inv-gen-btn').textContent = 'Создать заново';
-        if (INV.mode === 'ai') refreshBalance();
         hapticNotif('success');
     } catch (e) {
-        if (e?.status === 402) {
-            $('inv-preview-empty').textContent = 'Недостаточно средств — пополните баланс (AI-фон стоит 49 ₽)';
-            $('inv-preview-empty').style.display = '';
-            hapticNotif('error');
-            refreshBalance();
-            openTopup();
-        } else {
-            $('inv-preview-empty').textContent = 'Не удалось создать: ' + (e?.message || 'ошибка');
-            $('inv-preview-empty').style.display = '';
-            hapticNotif('error');
-        }
+        $('inv-preview-empty').textContent = 'Не удалось создать: ' + (e?.message || 'ошибка');
+        $('inv-preview-empty').style.display = '';
+        hapticNotif('error');
     } finally {
         INV.loading = false;
         btn.disabled = false;

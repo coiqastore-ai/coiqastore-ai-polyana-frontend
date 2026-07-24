@@ -3083,11 +3083,16 @@ async function shareRecipe(recipeId) {
 
     // Try savePreparedInlineMessage + shareMessage (Telegram 8.0+)
     if (typeof tg.shareMessage === 'function' && tg.isVersionAtLeast('8.0')) {
+        let unlocked = false;
+        const unlock = () => { if (!unlocked) { unlocked = true; clearTimeout(timer); } };
+        const timer = setTimeout(unlock, 15000); // safety timeout
+
         try {
             toast('📤 Готовлю рецепт…');
             const data = await api(`/recipes/${recipeId}/prepare-share`, 'POST');
             if (data.prepared_message_id) {
                 tg.shareMessage(data.prepared_message_id, (success) => {
+                    unlock();
                     if (success) {
                         hapticNotif('success');
                         toast('✅ Рецепт отправлен!');
@@ -3096,14 +3101,71 @@ async function shareRecipe(recipeId) {
                 return;
             }
             // fallback if prepared_message_id is null
+            unlock();
         } catch(e) {
+            unlock();
             console.error('prepare-share failed:', e);
         }
     }
 
-    // Fallback: open inline query via switchInlineQueryChosenChat
-    // Not available from Mini App — show copy hint
-    toast('Скопируйте название рецепта и отправьте через @reciptesbot');
+    // Fallback for old Telegram: open inline query with hint
+    toast('Напишите @reciptesbot в чате с другом и выберите рецепт');
+}
+
+function showShareScreen(token) {
+    const tg = window.Telegram?.WebApp;
+    if (!tg) return;
+
+    // Show a minimal share screen
+    const page = $('home-page');
+    page.innerHTML = `
+        <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:60vh;text-align:center;padding:24px">
+            <div style="font-size:48px;margin-bottom:16px">📤</div>
+            <div style="font-size:18px;font-weight:700;margin-bottom:8px">Поделиться рецептом</div>
+            <div style="color:var(--hint);font-size:14px;margin-bottom:24px">Нажмите кнопку, чтобы выбрать чат</div>
+            <button class="btn btn-green" id="share-send-btn" style="max-width:300px" onclick="executeShare('${token}')">
+                Выбрать чат и отправить
+            </button>
+            <button class="btn btn-outline" style="max-width:300px;margin-top:8px" onclick="history.back()">Отмена</button>
+        </div>
+    `;
+}
+
+async function executeShare(token) {
+    const tg = window.Telegram?.WebApp;
+    if (!tg) return;
+
+    const btn = $('share-send-btn');
+    if (btn) { btn.disabled = true; btn.textContent = 'Готовлю…'; }
+
+    let unlocked = false;
+    const unlock = () => { if (!unlocked) { unlocked = true; clearTimeout(timer); } };
+    const timer = setTimeout(() => { unlock(); if (btn) { btn.disabled = false; btn.textContent = 'Выбрать чат и отправить'; } }, 15000);
+
+    try {
+        const data = await api(`/recipes/share/${token}/prepare-message`, 'POST');
+        if (data.prepared_message_id) {
+            tg.shareMessage(data.prepared_message_id, (success) => {
+                unlock();
+                if (success) {
+                    hapticNotif('success');
+                    toast('✅ Рецепт отправлен!');
+                    tg.close();
+                } else {
+                    if (btn) { btn.disabled = false; btn.textContent = 'Выбрать чат и отправить'; }
+                }
+            });
+            return;
+        }
+        unlock();
+        if (btn) { btn.disabled = false; btn.textContent = 'Выбрать чат и отправить'; }
+        toast('Не удалось подготовить рецепт');
+    } catch(e) {
+        unlock();
+        if (btn) { btn.disabled = false; btn.textContent = 'Выбрать чат и отправить'; }
+        console.error(e);
+        toast('Ошибка подготовки');
+    }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -3698,8 +3760,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         $('greeting-name').textContent = `Привет, ${S.user.first_name}! 👋`;
         $('greeting-sub').textContent = 'Что планируем?';
 
+        // Deep link: share recipe
+        if (startParam && startParam.startsWith('share_')) {
+            const token = startParam.replace('share_', '');
+            showScreen('s-home');
+            // Show share screen inline
+            showShareScreen(token);
+        }
         // Deep link: open specific event
-        if (startParam && startParam.startsWith('event_')) {
+        else if (startParam && startParam.startsWith('event_')) {
             const eid = parseInt(startParam.replace('event_', ''));
             showScreen('s-home');
             await loadEvents();

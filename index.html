@@ -3048,6 +3048,7 @@ function openRdetailMenu() {
         const safe = r.source_url.replace(/'/g, '%27');
         items.push({icon:'🔗', label:'Открыть источник', fn:`closeSheet();openLibUrl('${safe}')`});
     }
+    items.push({icon:'📤', label:'Поделиться рецептом', fn:`closeSheet();shareRecipe(${r.id})`});
     if (RDETAIL.from === 'event') {
         items.push({icon:'🗑', label:'Удалить из события',
             fn:`closeSheet();closeRdetail();deleteRecipe(${r.id})`, destructive:true});
@@ -3071,6 +3072,38 @@ async function normalizeRecipeIngredients() {
         hapticNotif('error');
         toast('Не удалось распознать количества');
     }
+}
+
+async function shareRecipe(recipeId) {
+    const tg = window.Telegram?.WebApp;
+    if (!tg) {
+        toast('Откройте ПОЛЯНУ внутри Telegram');
+        return;
+    }
+
+    // Try savePreparedInlineMessage + shareMessage (Telegram 8.0+)
+    if (typeof tg.shareMessage === 'function' && tg.isVersionAtLeast('8.0')) {
+        try {
+            toast('📤 Готовлю рецепт…');
+            const data = await api(`/recipes/${recipeId}/prepare-share`, 'POST');
+            if (data.prepared_message_id) {
+                tg.shareMessage(data.prepared_message_id, (success) => {
+                    if (success) {
+                        hapticNotif('success');
+                        toast('✅ Рецепт отправлен!');
+                    }
+                });
+                return;
+            }
+            // fallback if prepared_message_id is null
+        } catch(e) {
+            console.error('prepare-share failed:', e);
+        }
+    }
+
+    // Fallback: open inline query via switchInlineQueryChosenChat
+    // Not available from Mini App — show copy hint
+    toast('Скопируйте название рецепта и отправьте через @reciptesbot');
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

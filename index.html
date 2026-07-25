@@ -195,7 +195,7 @@
 
     /* ── Quick actions ─────────────────────────────────────────────────────── */
     .quick-actions {
-        display: grid; grid-template-columns: repeat(2, 1fr);
+        display: grid; grid-template-columns: repeat(3, 1fr);
         gap: 8px; margin-bottom: 12px;
     }
     .quick-btn {
@@ -898,6 +898,64 @@
         height: 100%; background: var(--green); border-radius: 2px;
         transition: width .3s ease-out; width: 0%;
     }
+
+    /* ── Referral screen ────────────────────────────────────────────────────── */
+    .ref-hero {
+        background: linear-gradient(135deg, var(--green) 0%, var(--green2) 100%);
+        color: #fff; border-radius: var(--radius); padding: 20px;
+        margin-bottom: 12px; text-align: center;
+    }
+    .ref-hero-title { font-size: 18px; font-weight: 700; margin-bottom: 6px; }
+    .ref-hero-sub { font-size: 13px; opacity: .85; line-height: 1.4; }
+    .ref-stats {
+        display: grid; grid-template-columns: repeat(3, 1fr);
+        gap: 8px; margin-bottom: 12px;
+    }
+    .ref-stat-card {
+        background: var(--bg); border-radius: var(--radius-sm);
+        padding: 14px 8px; text-align: center;
+        box-shadow: var(--shadow);
+    }
+    .ref-stat-card.accent { background: linear-gradient(135deg, var(--green), var(--green2)); color: #fff; }
+    .ref-stat-value { font-size: 22px; font-weight: 700; }
+    .ref-stat-label { font-size: 11px; color: var(--hint); margin-top: 2px; }
+    .ref-stat-card.accent .ref-stat-label { color: rgba(255,255,255,.7); }
+    .ref-details-card { padding: 0; }
+    .ref-detail-row {
+        display: flex; justify-content: space-between; align-items: center;
+        padding: 12px 16px; border-bottom: .5px solid var(--divider);
+    }
+    .ref-detail-row:last-child { border-bottom: none; }
+    .ref-detail-label { font-size: 14px; color: var(--text); }
+    .ref-detail-value { font-size: 14px; font-weight: 600; }
+    .ref-detail-value.accent { color: var(--green); }
+    .ref-link-card { padding: 16px; }
+    .ref-link-label { font-size: 12px; color: var(--hint); margin-bottom: 6px; }
+    .ref-link-value {
+        font-size: 13px; font-family: monospace;
+        background: var(--bg2); padding: 10px 12px;
+        border-radius: 8px; margin-bottom: 12px;
+        word-break: break-all; user-select: all;
+    }
+    .ref-link-actions { display: flex; gap: 8px; }
+    .ref-link-actions .btn { flex: 1; }
+    .ref-history-item {
+        padding: 12px 16px; border-bottom: .5px solid var(--divider);
+    }
+    .ref-history-item:last-child { border-bottom: none; }
+    .ref-history-amount { font-size: 16px; font-weight: 600; }
+    .ref-history-amount.positive { color: var(--green); }
+    .ref-history-amount.negative { color: var(--burgundy); }
+    .ref-history-desc { font-size: 13px; color: var(--hint); margin-top: 2px; }
+    .ref-history-status {
+        font-size: 12px; margin-top: 4px;
+        padding: 2px 8px; border-radius: 10px;
+        display: inline-block;
+    }
+    .ref-history-status.pending { background: #fff3cd; color: #856404; }
+    .ref-history-status.available { background: #d4edda; color: #155724; }
+    .ref-history-status.cancelled { background: #f8d7da; color: #721c24; }
+    .ref-history-status.reversed { background: #f8d7da; color: #721c24; }
     </style>
 </head>
 <body>
@@ -969,6 +1027,10 @@
             <button class="quick-btn" onclick="goRecipes()">
                 <span class="quick-btn-icon">📖</span>
                 <span class="quick-btn-label">Рецепты</span>
+            </button>
+            <button class="quick-btn" onclick="openReferral()">
+                <span class="quick-btn-icon">🎁</span>
+                <span class="quick-btn-label">Друзья</span>
             </button>
         </div>
 
@@ -1349,6 +1411,126 @@
     </div>
     <!-- FAB: add recipe -->
     <button class="fab" onclick="openLibAddRecipe()" aria-label="Добавить рецепт">＋</button>
+</div>
+
+<!-- ══ SCREEN: Referral ════════════════════════════════════════════════════ -->
+<div id="s-referral" class="screen">
+    <div class="page">
+        <!-- Header -->
+        <div class="detail-header">
+            <button class="detail-back" onclick="goHome()" aria-label="Назад">←</button>
+            <div class="detail-title">Пригласить друзей</div>
+            <div></div>
+        </div>
+
+        <!-- Hero banner -->
+        <div class="ref-hero">
+            <div class="ref-hero-title">Пользуйтесь ИИ бесплатно</div>
+            <div class="ref-hero-sub">Получайте 10% от пополнений приглашённых друзей бонусными баллами.</div>
+        </div>
+
+        <!-- Balance cards -->
+        <div class="ref-stats" id="ref-stats">
+            <div class="ref-stat-card">
+                <div class="ref-stat-value" id="ref-paid">0</div>
+                <div class="ref-stat-label">Куплено</div>
+            </div>
+            <div class="ref-stat-card accent">
+                <div class="ref-stat-value" id="ref-bonus">0</div>
+                <div class="ref-stat-label">Бонусных</div>
+            </div>
+            <div class="ref-stat-card">
+                <div class="ref-stat-value" id="ref-pending">0</div>
+                <div class="ref-stat-label">Ожидают</div>
+            </div>
+        </div>
+
+        <!-- Stats -->
+        <div class="card ref-details-card">
+            <div class="ref-detail-row">
+                <span class="ref-detail-label">Приглашено</span>
+                <span class="ref-detail-value" id="ref-invited">0</span>
+            </div>
+            <div class="ref-detail-row">
+                <span class="ref-detail-label">Активных</span>
+                <span class="ref-detail-value" id="ref-activated">0</span>
+            </div>
+            <div class="ref-detail-row">
+                <span class="ref-detail-label">Совершили оплату</span>
+                <span class="ref-detail-value" id="ref-paying">0</span>
+            </div>
+            <div class="ref-detail-row">
+                <span class="ref-detail-label">Получено всего</span>
+                <span class="ref-detail-value accent" id="ref-total-reward">0 баллов</span>
+            </div>
+        </div>
+
+        <!-- Referral link -->
+        <div class="card ref-link-card">
+            <div class="ref-link-label">Ваша ссылка</div>
+            <div class="ref-link-value" id="ref-link">—</div>
+            <div class="ref-link-actions">
+                <button class="btn btn-sm btn-green" onclick="shareReferralLink()">📨 Пригласить друга</button>
+                <button class="btn btn-sm btn-outline" onclick="copyReferralLink()">🔗 Скопировать ссылку</button>
+            </div>
+        </div>
+
+        <!-- History -->
+        <div class="section-header">
+            <span class="section-title">История начислений</span>
+        </div>
+        <div class="card" id="ref-history-wrap">
+            <div id="ref-history"></div>
+        </div>
+
+        <!-- Rules link -->
+        <div style="text-align:center;padding:16px 0">
+            <button class="btn btn-sm btn-outline" onclick="showRefRules()">📄 Правила программы</button>
+        </div>
+    </div>
+</div>
+
+<!-- ══ Onboarding Screen ════════════════════════════════════════════════════ -->
+<div id="s-onboarding" class="screen">
+    <div style="padding:20px 20px 40px;max-width:480px;margin:0 auto">
+        <div id="ob-step-text" style="font-size:17px;line-height:1.6;margin-bottom:24px"></div>
+        <div id="ob-buttons"></div>
+    </div>
+</div>
+
+<!-- ══ Documents Screen ═════════════════════════════════════════════════════ -->
+<div id="s-documents" class="screen">
+    <div style="padding:20px">
+        <h2 style="font-size:20px;margin-bottom:8px">📄 Документы ПОЛЯНЫ</h2>
+        <p style="color:var(--hint);font-size:14px;margin-bottom:20px">Ознакомьтесь с условиями использования и политикой данных.</p>
+        <div id="docs-list"></div>
+    </div>
+</div>
+
+<!-- ══ Document Viewer Screen ═══════════════════════════════════════════════ -->
+<div id="s-doc-viewer" class="screen">
+    <div style="padding:20px">
+        <div id="doc-viewer-title" style="font-size:20px;font-weight:600;margin-bottom:16px"></div>
+        <div id="doc-viewer-content" style="font-size:15px;line-height:1.7;white-space:pre-wrap;color:var(--text)"></div>
+        <div id="doc-viewer-actions" style="margin-top:24px"></div>
+    </div>
+</div>
+
+<!-- ══ Privacy Screen ═══════════════════════════════════════════════════════ -->
+<div id="s-privacy" class="screen">
+    <div style="padding:20px">
+        <h2 style="font-size:20px;margin-bottom:16px">🔒 Данные и конфиденциальность</h2>
+        <div class="card" style="margin-bottom:12px">
+            <div style="font-weight:600;margin-bottom:8px">Статус согласий</div>
+            <div id="privacy-status" style="font-size:14px;color:var(--hint)"></div>
+        </div>
+        <div class="card" style="margin-bottom:12px">
+            <div style="font-weight:600;margin-bottom:12px">Управление</div>
+            <button class="btn btn-sm btn-outline" style="width:100%;margin-bottom:8px" onclick="openDocuments()">📄 Документы</button>
+            <button class="btn btn-sm btn-outline" style="width:100%;margin-bottom:8px" onclick="exportData()">📥 Скачать мои данные</button>
+            <button class="btn btn-sm btn-outline" style="width:100%;margin-bottom:8px;color:var(--burgundy);border-color:var(--burgundy)" onclick="requestDelete()">🗑 Удалить аккаунт</button>
+        </div>
+    </div>
 </div>
 
 <!-- ══ Overlays ═══════════════════════════════════════════════════════════ -->
@@ -1825,10 +2007,246 @@ function openSettings() {
     haptic();
     openSheet('Аккаунт', [
         {icon: '👤', label: S.user ? `${S.user.first_name || ''}${S.user.username ? ' @'+S.user.username : ''}`.trim() : '—', fn: 'closeSheet()'},
-        {icon: '💰', label: 'Партнёрская программа', fn: 'closeSheet();openReferral()'},
+        {icon: '🎁', label: 'Пригласить друзей', fn: 'closeSheet();openReferral()'},
         {icon: '📤', label: 'Поделиться ПОЛЯНОЙ', fn: 'shareApp(); closeSheet()'},
+        {icon: '📄', label: 'Документы и конфиденциальность', fn: 'closeSheet();openPrivacy()'},
         {icon: '✕',  label: 'Закрыть', fn: 'closeSheet()'},
     ]);
+}
+
+// ── Onboarding ───────────────────────────────────────────────────────────────
+
+const OB_SCREENS = [
+    { text: '🌿 <b>Добро пожаловать в ПОЛЯНУ</b><br><br>Это ваша личная библиотека рецептов прямо в Telegram.<br><br>Отправьте боту рецепт — ПОЛЯНА аккуратно сохранит его, чтобы он больше не потерялся.', btns: [{label:'👋 Понятно, дальше', action:'next'}] },
+    { text: '📥 <b>Сохраняйте рецепты откуда угодно</b><br><br>Можно отправить:<br>📷 фото или скриншот<br>🔗 ссылку на сайт<br>📝 обычный текст<br>🎙 голосовое сообщение<br>📩 пересланное сообщение<br><br>Бот распознает рецепт и добавит его в библиотеку.', btns: [{label:'Дальше', action:'next'}] },
+    { text: '📚 <b>Всё хранится в одном месте</b><br><br>В библиотеке можно:<br>— искать рецепты<br>— редактировать<br>— менять количество порций<br>— добавлять в избранное<br>— делиться с друзьями<br>— сохранять рецепты друзей', btns: [{label:'Дальше', action:'next'}] },
+    { text: '🍽 <b>Планируйте ужины и встречи</b><br><br>Из сохранённых рецептов можно собрать меню, пересчитать ингредиенты и получить единый список покупок.<br><br>Для совместных событий можно распределить покупки и посчитать расходы.', btns: [{label:'Дальше', action:'next'}] },
+    { text: '✨ <b>Бесплатные функции и ИИ</b><br><br>Бесплатно:<br>— библиотека<br>— поиск<br>— ручное редактирование<br>— обмен рецептами<br>— события<br>— списки покупок<br>— расчёт расходов<br><br>AI-баллы используются только там, где работает ИИ.', btns: [{label:'Продолжить', action:'next'}] },
+    { text: '', btns: [] }, // legal — filled dynamically
+    { text: 'Всё готово 🌿<br><br>Отправьте сюда первый рецепт или откройте библиотеку.', btns: [{label:'📚 Открыть библиотеку', action:'done_library'}, {label:'📷 Отправить рецепт', action:'done_recipe'}] },
+];
+
+let obStep = 0;
+
+async function startOnboarding() {
+    try {
+        const st = await api('/onboarding/status');
+        if (st.status === 'completed' || st.status === 'skipped') return false;
+        obStep = st.step || 0;
+    } catch { obStep = 0; }
+    showOnboardingStep();
+    return true;
+}
+
+function showOnboardingStep() {
+    if (obStep >= OB_SCREENS.length) obStep = 0;
+    const scr = OB_SCREENS[obStep];
+    showScreen('s-onboarding');
+    const el = $('ob-step-text');
+    const btnsEl = $('ob-buttons');
+
+    if (obStep === 5) {
+        // Legal screen — dynamic
+        loadLegalScreen(el, btnsEl);
+        return;
+    }
+
+    el.innerHTML = scr.text;
+    let html = '';
+    if (obStep > 0) {
+        html += `<button class="btn btn-sm btn-outline" style="margin-bottom:8px;width:100%" onclick="obBack()">⬅️ Назад</button>`;
+    }
+    for (const b of scr.btns) {
+        html += `<button class="btn btn-green" style="width:100%;margin-bottom:8px" onclick="obAction('${b.action}')">${b.label}</button>`;
+    }
+    if (obStep < 5) {
+        html += `<button class="btn btn-sm btn-outline" style="width:100%" onclick="obSkip()">Пропустить знакомство</button>`;
+    }
+    btnsEl.innerHTML = html;
+    S.tg?.BackButton?.show?.();
+    S.tg?.BackButton?.onClick?.(() => obBack());
+}
+
+async function loadLegalScreen(el, btnsEl) {
+    el.innerHTML = '📋 <b>Документы</b><br><br>Чтобы пользоваться ПОЛЯНОЙ, ознакомьтесь с документами.';
+    try {
+        const status = await api('/legal/status');
+        const termsOk = status.terms?.accepted;
+        const pdnOk = status.personal_data_consent?.accepted;
+        let statusHtml = `<div style="margin:12px 0">`;
+        statusHtml += `<div style="padding:8px 0">${termsOk ? '✅' : '⬜'} Пользовательское соглашение</div>`;
+        statusHtml += `<div style="padding:8px 0">${pdnOk ? '✅' : '⬜'} Обработка персональных данных</div>`;
+        statusHtml += `</div>`;
+        el.innerHTML += statusHtml;
+
+        let html = '';
+        if (!termsOk) html += `<button class="btn btn-sm btn-green" style="width:100%;margin-bottom:8px" onclick="acceptDoc('terms')">✅ Принять соглашение</button>`;
+        if (!pdnOk) html += `<button class="btn btn-sm btn-green" style="width:100%;margin-bottom:8px" onclick="acceptDoc('personal_data_consent')">✅ Дать согласие на данные</button>`;
+        html += `<button class="btn btn-sm btn-outline" style="width:100%;margin-bottom:8px" onclick="openDocuments()">📋 Открыть документы</button>`;
+        if (termsOk && pdnOk) {
+            html += `<button class="btn btn-green" style="width:100%;margin-bottom:8px" onclick="obAction('next')">Продолжить</button>`;
+        }
+        html += `<button class="btn btn-sm btn-outline" style="width:100%" onclick="obBack()">⬅️ Назад</button>`;
+        btnsEl.innerHTML = html;
+    } catch {
+        el.innerHTML += '<br><br>Не удалось загрузить статус документов.';
+    }
+}
+
+async function acceptDoc(docType) {
+    try {
+        await api('/legal/accept', 'POST', { document_type: docType, document_version: '1.0' });
+        haptic('success');
+        // Refresh legal screen
+        obStep = 5;
+        showOnboardingStep();
+    } catch (e) {
+        toast('Не удалось принять документ');
+    }
+}
+
+function obAction(action) {
+    haptic();
+    if (action === 'next') {
+        obStep++;
+        api('/onboarding/step', 'POST', { step: obStep }).catch(()=>{});
+        showOnboardingStep();
+    } else if (action === 'done_library') {
+        api('/onboarding/skip', 'POST').catch(()=>{});
+        goHome();
+    } else if (action === 'done_recipe') {
+        api('/onboarding/skip', 'POST').catch(()=>{});
+        goHome();
+        toast('Отправьте рецепт боту в Telegram');
+    }
+}
+
+function obBack() {
+    haptic();
+    if (obStep > 0) {
+        obStep--;
+        showOnboardingStep();
+    } else {
+        goHome();
+    }
+}
+
+async function obSkip() {
+    haptic();
+    try { await api('/onboarding/skip', 'POST'); } catch {}
+    goHome();
+}
+
+// ── Documents ────────────────────────────────────────────────────────────────
+
+const DOC_LABELS = {
+    terms: '📜 Пользовательское соглашение',
+    privacy_policy: '🔒 Политика конфиденциальности',
+    personal_data_consent: '✅ Согласие на обработку данных',
+    ai_processing_consent: '🤖 Использование ИИ',
+    referral_terms: '🎁 Правила бонусной программы',
+};
+
+async function openDocuments() {
+    haptic();
+    showScreen('s-documents');
+    const list = $('docs-list');
+    list.innerHTML = '<div style="color:var(--hint)">Загрузка...</div>';
+    try {
+        const docs = await api('/legal/documents');
+        let status = {};
+        try { status = await api('/legal/status'); } catch {}
+
+        let html = '';
+        for (const d of docs) {
+            const label = DOC_LABELS[d.type] || d.title;
+            const accepted = status[d.type]?.accepted;
+            const statusBadge = d.requires_acceptance ? (accepted ? ' <span style="color:var(--green)">✅</span>' : ' <span style="color:var(--hint)">⬜</span>') : '';
+            html += `<div class="card" style="margin-bottom:8px;cursor:pointer" onclick="openDocViewer('${d.type}')">
+                <div style="font-weight:500">${label}${statusBadge}</div>
+                <div style="font-size:12px;color:var(--hint);margin-top:4px">Версия ${d.version}</div>
+            </div>`;
+        }
+        list.innerHTML = html || '<div style="color:var(--hint)">Документы пока не загружены.</div>';
+    } catch {
+        list.innerHTML = '<div style="color:var(--hint)">Не удалось загрузить документы.</div>';
+    }
+    S.tg?.BackButton?.show?.();
+    S.tg?.BackButton?.onClick?.(() => goHome());
+}
+
+async function openDocViewer(docType) {
+    haptic();
+    showScreen('s-doc-viewer');
+    $('doc-viewer-title').textContent = DOC_LABELS[docType] || docType;
+    $('doc-viewer-content').textContent = 'Загрузка...';
+    $('doc-viewer-actions').innerHTML = '';
+    try {
+        const doc = await api(`/legal/documents/${docType}`);
+        $('doc-viewer-content').textContent = doc.content;
+        let html = '';
+        if (doc.requires_acceptance) {
+            html += `<button class="btn btn-green" style="width:100%;margin-bottom:8px" onclick="acceptDocFromViewer('${docType}')">✅ Принять</button>`;
+        }
+        html += `<button class="btn btn-outline" style="width:100%" onclick="openDocuments()">⬅️ К документам</button>`;
+        $('doc-viewer-actions').innerHTML = html;
+    } catch {
+        $('doc-viewer-content').textContent = 'Не удалось загрузить документ.';
+    }
+    S.tg?.BackButton?.show?.();
+    S.tg?.BackButton?.onClick?.(() => openDocuments());
+}
+
+async function acceptDocFromViewer(docType) {
+    await acceptDoc(docType);
+    openDocuments();
+}
+
+// ── Privacy ──────────────────────────────────────────────────────────────────
+
+async function openPrivacy() {
+    haptic();
+    showScreen('s-privacy');
+    const el = $('privacy-status');
+    el.innerHTML = 'Загрузка...';
+    try {
+        const status = await api('/legal/status');
+        const items = [
+            { key: 'terms', label: 'Пользовательское соглашение' },
+            { key: 'personal_data_consent', label: 'Обработка персональных данных' },
+            { key: 'ai_processing_consent', label: 'Использование ИИ' },
+        ];
+        let html = '';
+        for (const it of items) {
+            const ok = status[it.key]?.accepted;
+            html += `<div style="padding:6px 0">${ok ? '✅' : '⬜'} ${it.label}</div>`;
+        }
+        el.innerHTML = html;
+    } catch {
+        el.innerHTML = 'Не удалось загрузить статус.';
+    }
+    S.tg?.BackButton?.show?.();
+    S.tg?.BackButton?.onClick?.(() => goHome());
+}
+
+async function exportData() {
+    try {
+        const data = await api('/account/export', 'POST');
+        const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
+        const url = URL.createObjectURL(blob);
+        S.tg?.openLink?.(url);
+        toast('Данные подготовлены');
+    } catch {
+        toast('Не удалось экспортировать данные');
+    }
+}
+
+async function requestDelete() {
+    S.tg?.showPopup?.({
+        title: 'Удаление аккаунта',
+        message: 'Вы уверены? Используйте /delete_me в боте для полного удаления.',
+        buttons: [{type: 'ok'}],
+    });
 }
 
 function shareApp() {
@@ -1839,37 +2257,81 @@ function shareApp() {
 
 async function openReferral() {
     haptic();
+    showScreen('s-referral');
+    // Track screen open
+    api('/referrals/me', {method:'GET'}).catch(()=>{});  // warm up
+    // Load dashboard
     let d;
-    try { d = await api('/referral'); }
-    catch { toast('Не удалось загрузить партнёрскую программу'); return; }
-    const message =
-        `Приглашай друзей и получай ${d.percent}% с их трат в боте (бонусом на баланс).\n\n` +
-        `👥 Приглашено: ${d.invited}\n` +
-        `✅ Заработано: ${d.earned_rub} ₽\n` +
-        `⏳ Ждёт зачисления (24ч): ${d.pending_rub} ₽`;
-    if (S.tg?.showPopup) {
-        S.tg.showPopup({
-            title: 'Партнёрская программа',
-            message,
-            buttons: [
-                { id: 'share', type: 'default', text: 'Поделиться ссылкой' },
-                { type: 'cancel' },
-            ],
-        }, (id) => { if (id === 'share') shareReferral(d.link); });
-    } else {
-        toast(message);
-        shareReferral(d.link);
-    }
+    try { d = await api('/referrals/me'); }
+    catch { toast('Не удалось загрузить данные'); return; }
+    S.referral = d;
+    // Balance cards
+    const bal = d.balance || {};
+    $('ref-paid').textContent = bal.paid_points || 0;
+    $('ref-bonus').textContent = bal.bonus_points || 0;
+    $('ref-pending').textContent = bal.pending_bonus_points || 0;
+    // Stats
+    const st = d.stats || {};
+    $('ref-invited').textContent = st.invited || 0;
+    $('ref-activated').textContent = st.activated || 0;
+    $('ref-paying').textContent = st.paying || 0;
+    $('ref-total-reward').textContent = `${st.total_reward_points || 0} баллов`;
+    // Link
+    $('ref-link').textContent = d.referral_url || '—';
+    // Load history
+    loadReferralHistory();
 }
 
-function shareReferral(link) {
+async function loadReferralHistory() {
+    let h;
+    try { h = await api('/referrals/history?limit=20'); }
+    catch { return; }
+    const list = $('ref-history');
+    const items = h.history || [];
+    if (!items.length) {
+        list.innerHTML = '<div style="padding:16px;text-align:center;color:var(--hint);font-size:13px">Пока нет начислений</div>';
+        return;
+    }
+    list.innerHTML = items.map(r => {
+        const sign = r.reward_points > 0 ? '+' : '';
+        const cls = r.status === 'cancelled' || r.status === 'reversed' ? 'negative' : 'positive';
+        const statusLabels = {pending:'ожидает',available:'начислено',cancelled:'отменено',reversed:'возврат'};
+        const statusCls = r.status;
+        return `
+        <div class="ref-history-item">
+            <div class="ref-history-amount ${cls}">${sign}${r.reward_points} баллов</div>
+            <div class="ref-history-desc">Пополнение приглашённого друга · ${esc(r.referred_name || '')}</div>
+            <div class="ref-history-status ${statusCls}">${statusLabels[r.status] || r.status}</div>
+        </div>`;
+    }).join('');
+}
+
+function shareReferralLink() {
+    const link = S.referral?.referral_url;
     if (!link) { toast('Ссылка пока недоступна'); return; }
-    const text = 'Попробуй ПОЛЯНУ — планировщик застолий с друзьями 🌿';
+    const text = '🌿 Я сохраняю рецепты в ПОЛЯНЕ\n\nМожно отправить боту ссылку, фотографию, текст или голосовое сообщение — он распознает рецепт и сохранит его в личную библиотеку.\n\nПопробовать:';
     if (S.tg?.openTelegramLink) {
         S.tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(text)}`);
     } else {
-        navigator.clipboard?.writeText(link).catch(()=>{});
-        toast('Ссылка скопирована');
+        shareReferral(link);
+    }
+}
+
+function copyReferralLink() {
+    const link = S.referral?.referral_url;
+    if (!link) { toast('Ссылка пока недоступна'); return; }
+    navigator.clipboard?.writeText(link).then(() => toast('Ссылка скопирована')).catch(() => {});
+}
+
+function showRefRules() {
+    if (S.tg?.showPopup) {
+        S.tg.showPopup({
+            title: 'Правила программы',
+            message: '1. Бонус — 10% от пополнений друзей\n2. Бонус начисляется баллами\n3. Баллы нельзя вывести\n4. Баллы тратятся на ИИ-функции\n5. Начисление через 7 дней\n6. При возврате — отмена\n7. Саморефералы запрещены',
+            buttons: [{ type: 'ok' }],
+        });
+    } else {
+        toast('Правила: бонус 10%, баллы внутри ПОЛЯНЫ, без вывода');
     }
 }
 
@@ -2327,9 +2789,25 @@ async function refreshBalance() {
         const d = await api('/balance');
         INV.balance = d.balance || 0;
         $('inv-balance-val').textContent = (d.balance_rub ?? 0) + ' ₽';
+        // Show referral offer when balance is low
+        if (INV.balance === 0) {
+            showReferralHook();
+        }
     } catch {
         $('inv-balance-val').textContent = '—';
     }
+}
+
+let _referralHookCooldown = 0;
+function showReferralHook() {
+    // Cooldown: don't show more than once per 7 days (except on explicit zero-balance screen)
+    const now = Date.now();
+    if (now - _referralHookCooldown < 7 * 24 * 60 * 60 * 1000) return;
+    _referralHookCooldown = now;
+    // Show as a toast-like hint
+    setTimeout(() => {
+        toast('🎁 Получите AI-баллы бесплатно — приглашайте друзей!');
+    }, 1000);
 }
 
 function openTopup() {
@@ -3756,6 +4234,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     if (S.user) {
+        // Check onboarding status first
+        const onboardingDone = await startOnboarding();
+        if (onboardingDone) {
+            hideMainBtn();
+            return; // onboarding screen is shown
+        }
+
         // Update greeting
         $('greeting-name').textContent = `Привет, ${S.user.first_name}! 👋`;
         $('greeting-sub').textContent = 'Что планируем?';

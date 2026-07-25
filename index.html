@@ -1597,6 +1597,8 @@
 // ═══════════════════════════════════════════════════════════════════════════
 const API = 'https://polyana.coiqa.ru/api';
 const BOT  = 'reciptesbot';
+const APP_VERSION = '2.1.0';
+const BUILD_DATE = '2026-07-25';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // STATE
@@ -2033,9 +2035,12 @@ async function startOnboarding() {
         const st = await api('/onboarding/status');
         if (st.status === 'completed' || st.status === 'skipped') return false;
         obStep = st.step || 0;
-    } catch { obStep = 0; }
-    showOnboardingStep();
-    return true;
+        showOnboardingStep();
+        return true;
+    } catch {
+        // API failed — do NOT show onboarding, go to home screen
+        return false;
+    }
 }
 
 function showOnboardingStep() {
@@ -2089,7 +2094,14 @@ async function loadLegalScreen(el, btnsEl) {
         html += `<button class="btn btn-sm btn-outline" style="width:100%" onclick="obBack()">⬅️ Назад</button>`;
         btnsEl.innerHTML = html;
     } catch {
-        el.innerHTML += '<br><br>Не удалось загрузить статус документов.';
+        el.innerHTML = 'Не удалось проверить документы<br><br>Попробуйте загрузить данные ещё раз.<br>Рецепты и ваш аккаунт не пострадали.';
+        btnsEl.innerHTML = `
+            <button class="btn btn-green" style="width:100%;margin-bottom:8px" 
+                    onclick="loadLegalScreen($('ob-step-text'), $('ob-buttons'))">Повторить</button>
+            <button class="btn btn-sm btn-outline" style="width:100%;margin-bottom:8px" 
+                    onclick="openDocuments()">📋 Открыть документы</button>
+            <button class="btn btn-sm btn-outline" style="width:100%" 
+                    onclick="window.open('https://t.me/${BOT}', '_blank')">Поддержка</button>`;
     }
 }
 
@@ -2259,7 +2271,7 @@ async function openReferral() {
     haptic();
     showScreen('s-referral');
     // Track screen open
-    api('/referrals/me', {method:'GET'}).catch(()=>{});  // warm up
+    api('/referrals/me').catch(()=>{});  // warm up
     // Load dashboard
     let d;
     try { d = await api('/referrals/me'); }

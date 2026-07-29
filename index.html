@@ -1,0 +1,4622 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>🌿 ПОЛЯНА</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
+    <style>
+    /* ── Variables ─────────────────────────────────────────────────────────── */
+    :root {
+        --bg:           var(--tg-theme-bg-color, #ffffff);
+        --bg2:          var(--tg-theme-secondary-bg-color, #f2f2f7);
+        --text:         var(--tg-theme-text-color, #1c1c1e);
+        --hint:         var(--tg-theme-hint-color, #8e8e93);
+        --link:         var(--tg-theme-link-color, #007aff);
+        --btn:          var(--tg-theme-button-color, #2d7a3e);
+        --btn-text:     var(--tg-theme-button-text-color, #ffffff);
+        --divider:      var(--tg-theme-section_separator_color, #e5e5ea);
+
+        --green:        #2d7a3e;
+        --green2:       #4a9c5e;
+        --burgundy:     #8b1538;
+        --radius:       16px;
+        --radius-sm:    10px;
+        --shadow:       0 2px 12px rgba(0,0,0,.08);
+        --shadow-md:    0 4px 20px rgba(0,0,0,.12);
+    }
+
+    /* ── Reset ─────────────────────────────────────────────────────────────── */
+    *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+    html, body {
+        font-family: -apple-system, 'SF Pro Text', 'Segoe UI', Roboto, sans-serif;
+        background: var(--bg2);
+        color: var(--text);
+        line-height: 1.5;
+        -webkit-font-smoothing: antialiased;
+        overscroll-behavior: none;
+        min-height: 100vh;
+    }
+
+    /* ── Screens ───────────────────────────────────────────────────────────── */
+    .screen { display:none; }
+    .screen.active { display:block; animation: fadeUp .2s ease-out; }
+    @keyframes fadeUp {
+        from { opacity:0; transform:translateY(6px); }
+        to   { opacity:1; transform:none; }
+    }
+
+    /* ── Scroll container ──────────────────────────────────────────────────── */
+    .page {
+        max-width: 640px;
+        margin: 0 auto;
+        padding: 12px 12px 80px;
+        min-height: 100vh;
+    }
+
+    /* ── Loading ───────────────────────────────────────────────────────────── */
+    .loading-wrap {
+        display: flex; flex-direction: column;
+        align-items: center; justify-content: center;
+        min-height: 100vh; gap: 16px;
+    }
+    .logo-spin {
+        font-size: 56px;
+        animation: spin .8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Auth screen ───────────────────────────────────────────────────────── */
+    .auth-wrap {
+        display: flex; flex-direction: column;
+        align-items: center; justify-content: center;
+        min-height: 100vh; text-align: center; padding: 32px 24px;
+    }
+    .auth-icon { font-size: 80px; margin-bottom: 20px; }
+    .auth-title { font-size: 22px; font-weight: 700; margin-bottom: 8px; }
+    .auth-sub { color: var(--hint); font-size: 15px; margin-bottom: 28px; max-width: 300px; }
+
+    /* ── Buttons ───────────────────────────────────────────────────────────── */
+    .btn {
+        display: block; width: 100%; padding: 14px 20px;
+        border: none; border-radius: var(--radius-sm);
+        background: var(--btn); color: var(--btn-text);
+        font-size: 16px; font-weight: 600;
+        cursor: pointer; transition: opacity .15s, transform .1s;
+        text-align: center; text-decoration: none;
+    }
+    .btn:active { transform: scale(.98); opacity: .85; }
+    .btn:disabled { opacity: .45; cursor: not-allowed; }
+    .btn-secondary { background: var(--bg2); color: var(--btn); }
+    .btn-green { background: linear-gradient(135deg, var(--green), var(--green2)); color: #fff; }
+    .btn-outline {
+        background: transparent; border: 1.5px solid var(--divider);
+        color: var(--text);
+    }
+    .btn-sm {
+        font-size: 14px; padding: 10px 16px; border-radius: 8px;
+    }
+
+    /* ── Card ──────────────────────────────────────────────────────────────── */
+    .card {
+        background: var(--bg); border-radius: var(--radius);
+        box-shadow: var(--shadow); overflow: hidden;
+        margin-bottom: 12px;
+    }
+
+    /* ── Hero card ─────────────────────────────────────────────────────────── */
+    .hero-card {
+        background: linear-gradient(135deg, var(--green) 0%, var(--green2) 100%);
+        color: #fff;
+        border-radius: var(--radius);
+        padding: 20px;
+        height: 180px;
+        display: flex; flex-direction: column; justify-content: space-between;
+        box-shadow: 0 6px 24px rgba(45,122,62,.3);
+        margin-bottom: 12px;
+        position: relative;
+        overflow: hidden;
+        cursor: pointer;
+        transition: transform .15s;
+    }
+    .hero-card:active { transform: scale(.99); }
+    .hero-card::before {
+        content: '';
+        position: absolute; top: -40px; right: -40px;
+        width: 160px; height: 160px;
+        background: rgba(255,255,255,.08);
+        border-radius: 50%;
+    }
+    .hero-label {
+        font-size: 11px; font-weight: 700; letter-spacing: 1px;
+        text-transform: uppercase; opacity: .8;
+    }
+    .hero-name {
+        font-size: 22px; font-weight: 700;
+        line-height: 1.2;
+        overflow: hidden; text-overflow: ellipsis;
+        display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+    }
+    .hero-meta {
+        font-size: 13px; opacity: .85; margin-top: 4px;
+    }
+    .hero-bottom { }
+    .hero-stats {
+        display: flex; gap: 12px;
+        font-size: 12px; opacity: .85; margin-bottom: 8px;
+    }
+
+    /* ── Progress bar ──────────────────────────────────────────────────────── */
+    .progress-wrap { margin-top: 6px; }
+    .progress-track {
+        height: 4px; border-radius: 2px;
+        background: rgba(255,255,255,.25);
+        overflow: hidden;
+    }
+    .progress-fill {
+        height: 100%; border-radius: 2px;
+        background: #fff;
+        width: 0%;
+        transition: width .3s ease-out;
+    }
+    .progress-fill.dark {
+        background: var(--green);
+    }
+    .progress-label {
+        font-size: 11px; opacity: .8; margin-top: 4px;
+        text-align: right;
+    }
+
+    /* Card progress (for events list) */
+    .card-progress-track {
+        height: 3px; border-radius: 2px;
+        background: var(--bg2); overflow: hidden;
+    }
+    .card-progress-fill {
+        height: 100%; border-radius: 2px;
+        background: var(--green); width: 0%;
+        transition: width .3s ease-out;
+    }
+
+    /* ── Section header ────────────────────────────────────────────────────── */
+    .section-header {
+        display: flex; align-items: center; justify-content: space-between;
+        padding: 0 4px; margin-bottom: 8px; margin-top: 16px;
+    }
+    .section-title {
+        font-size: 13px; font-weight: 700;
+        text-transform: uppercase; letter-spacing: .5px;
+        color: var(--hint);
+    }
+    .section-action {
+        font-size: 13px; color: var(--link); cursor: pointer;
+    }
+
+    /* ── Quick actions ─────────────────────────────────────────────────────── */
+    .quick-actions {
+        display: grid; grid-template-columns: repeat(3, 1fr);
+        gap: 8px; margin-bottom: 12px;
+    }
+    .quick-btn {
+        background: var(--bg); border-radius: var(--radius-sm);
+        padding: 14px 8px;
+        display: flex; flex-direction: column; align-items: center; gap: 6px;
+        cursor: pointer; border: none;
+        box-shadow: var(--shadow); transition: transform .15s, opacity .15s;
+    }
+    .quick-btn:active { transform: scale(.97); opacity: .85; }
+    .quick-btn:disabled { opacity: .4; cursor: not-allowed; }
+    .quick-btn-icon { font-size: 24px; }
+    .quick-btn-label { font-size: 12px; font-weight: 500; color: var(--text); }
+
+    /* ── Event row card ────────────────────────────────────────────────────── */
+    .event-row {
+        display: flex; align-items: center; gap: 12px;
+        padding: 14px 16px;
+        border-bottom: .5px solid var(--divider);
+        cursor: pointer;
+        transition: background .15s;
+    }
+    .event-row:last-child { border-bottom: none; }
+    .event-row:active { background: var(--bg2); }
+    .event-emoji { font-size: 28px; flex-shrink: 0; }
+    .event-info { flex: 1; min-width: 0; }
+    .event-name {
+        font-size: 15px; font-weight: 600;
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .event-meta-row {
+        font-size: 12px; color: var(--hint); margin-top: 2px;
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .event-progress-num {
+        font-size: 12px; color: var(--hint); flex-shrink: 0;
+    }
+
+    /* ── Skeleton loaders ──────────────────────────────────────────────────── */
+    .skeleton {
+        background: var(--bg2);
+        border-radius: 6px;
+        position: relative; overflow: hidden;
+    }
+    .skeleton::after {
+        content: '';
+        position: absolute; inset: 0;
+        background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,.5) 50%, transparent 100%);
+        animation: shimmer 1.4s infinite;
+        transform: translateX(-100%);
+    }
+    @keyframes shimmer {
+        to { transform: translateX(100%); }
+    }
+    .skeleton-hero {
+        height: 180px; border-radius: var(--radius);
+        margin-bottom: 12px;
+    }
+    .skeleton-row {
+        display: flex; align-items: center; gap: 12px;
+        padding: 14px 16px; border-bottom: .5px solid var(--divider);
+    }
+    .skeleton-row:last-child { border-bottom: none; }
+    .skeleton-circle { width: 40px; height: 40px; border-radius: 50%; flex-shrink: 0; }
+    .skeleton-lines { flex: 1; display: flex; flex-direction: column; gap: 6px; }
+    .skeleton-line { height: 12px; border-radius: 4px; }
+    .skeleton-line.short { width: 60%; }
+
+    /* ── Empty state ───────────────────────────────────────────────────────── */
+    .empty-state {
+        text-align: center; padding: 48px 24px;
+    }
+    .empty-icon { font-size: 56px; margin-bottom: 16px; }
+    .empty-title { font-size: 18px; font-weight: 700; margin-bottom: 8px; }
+    .empty-sub { color: var(--hint); font-size: 14px; margin-bottom: 24px; }
+    .template-chips {
+        display: flex; flex-wrap: wrap; justify-content: center; gap: 8px;
+    }
+    .chip {
+        background: var(--bg2); border: none;
+        border-radius: 20px; padding: 8px 16px;
+        font-size: 14px; font-weight: 500; cursor: pointer;
+        transition: background .15s, transform .1s;
+        color: var(--text);
+    }
+    .chip:active { transform: scale(.96); }
+    .chip.active { background: var(--green); color: #fff; }
+
+    /* ── FAB ───────────────────────────────────────────────────────────────── */
+    .fab {
+        position: fixed; right: 16px; bottom: 24px;
+        width: 56px; height: 56px; border-radius: 50%;
+        background: var(--burgundy);
+        border: none; color: #fff; font-size: 26px;
+        display: flex; align-items: center; justify-content: center;
+        box-shadow: 0 4px 16px rgba(139,21,56,.45);
+        cursor: pointer; transition: transform .15s, box-shadow .15s;
+        z-index: 40;
+    }
+    .fab:active { transform: scale(.93); box-shadow: 0 2px 8px rgba(139,21,56,.3); }
+
+    /* ── Home greeting ─────────────────────────────────────────────────────── */
+    .greeting-row {
+        display: flex; align-items: center; justify-content: space-between;
+        margin-bottom: 12px;
+    }
+    .greeting-name { font-size: 20px; font-weight: 700; }
+    .greeting-sub { font-size: 14px; color: var(--hint); }
+    .settings-btn {
+        width: 36px; height: 36px; border-radius: 50%;
+        background: var(--bg); border: none;
+        font-size: 18px; cursor: pointer;
+        display: flex; align-items: center; justify-content: center;
+        box-shadow: var(--shadow);
+    }
+
+    /* ── Collapsed past events ─────────────────────────────────────────────── */
+    .collapsible-header {
+        display: flex; align-items: center; gap: 8px;
+        padding: 12px 16px; cursor: pointer;
+        color: var(--hint); font-size: 14px; font-weight: 500;
+    }
+    .collapsible-arrow { transition: transform .2s; font-size: 12px; }
+    .collapsible-arrow.open { transform: rotate(90deg); }
+
+    /* ── CREATE SCREEN ─────────────────────────────────────────────────────── */
+    .form-label {
+        font-size: 13px; font-weight: 600; color: var(--hint);
+        text-transform: uppercase; letter-spacing: .4px;
+        margin-bottom: 6px; margin-top: 16px;
+        display: block;
+    }
+    .form-input {
+        width: 100%; padding: 13px 14px;
+        background: var(--bg); border: 1.5px solid var(--divider);
+        border-radius: var(--radius-sm); color: var(--text);
+        font-size: 16px; font-family: inherit;
+        transition: border-color .15s;
+        outline: none;
+        appearance: none; -webkit-appearance: none;
+    }
+    .form-input:focus { border-color: var(--green); }
+    .form-input.error { border-color: #ff3b30; }
+    .form-error { font-size: 12px; color: #ff3b30; margin-top: 4px; }
+    .form-hint { font-size: 12px; color: var(--hint); margin-top: 4px; }
+
+    .date-row {
+        display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+    }
+    .quick-date-chips {
+        display: flex; gap: 6px; margin-bottom: 8px; flex-wrap: wrap;
+    }
+    .quick-chip {
+        background: var(--bg2); border: none; border-radius: 16px;
+        padding: 6px 14px; font-size: 13px; font-weight: 500;
+        cursor: pointer; color: var(--text);
+        transition: background .15s, color .15s;
+    }
+    .quick-chip.active { background: var(--green); color: #fff; }
+
+    .template-row {
+        display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px;
+        margin-bottom: 4px;
+    }
+    .tpl-btn {
+        background: var(--bg2); border: 2px solid transparent;
+        border-radius: var(--radius-sm); padding: 10px 6px;
+        display: flex; flex-direction: column; align-items: center; gap: 4px;
+        cursor: pointer; transition: all .15s;
+    }
+    .tpl-btn.active { border-color: var(--green); background: rgba(45,122,62,.08); }
+    .tpl-btn:active { transform: scale(.97); }
+    .tpl-emoji { font-size: 22px; }
+    .tpl-name { font-size: 11px; font-weight: 600; color: var(--text); text-align: center; }
+
+    .collapsible-section {
+        background: var(--bg); border-radius: var(--radius-sm);
+        margin-top: 12px; overflow: hidden;
+    }
+    .collapsible-toggle {
+        display: flex; align-items: center; justify-content: space-between;
+        padding: 14px 16px; cursor: pointer; font-size: 15px; color: var(--hint);
+    }
+    .collapsible-body { padding: 0 16px 16px; display: none; }
+    .collapsible-body.open { display: block; }
+
+    /* ── DETAIL SCREEN ─────────────────────────────────────────────────────── */
+    .detail-header {
+        display: flex; align-items: center; gap: 10px;
+        margin-bottom: 12px;
+    }
+    .detail-back {
+        width: 36px; height: 36px; border-radius: 50%;
+        background: var(--bg); border: none; font-size: 20px;
+        color: var(--text);
+        cursor: pointer; display: flex; align-items: center; justify-content: center;
+        box-shadow: var(--shadow); flex-shrink: 0;
+    }
+    .detail-title {
+        flex: 1; font-size: 18px; font-weight: 700;
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .detail-menu-btn {
+        width: 36px; height: 36px; border-radius: 50%;
+        background: var(--bg); border: none; font-size: 20px;
+        color: var(--text);
+        cursor: pointer; display: flex; align-items: center; justify-content: center;
+        box-shadow: var(--shadow);
+    }
+
+    .event-info-bar {
+        background: var(--bg); border-radius: var(--radius-sm);
+        padding: 12px 14px; margin-bottom: 10px;
+        font-size: 13px; color: var(--hint);
+        display: flex; flex-wrap: wrap; gap: 8px;
+    }
+    .info-pill {
+        display: flex; align-items: center; gap: 4px;
+    }
+
+    /* ── Collaborators ─────────────────────────────────────────────────────── */
+    .collabs-row {
+        display: flex; align-items: center; gap: 10px;
+        background: var(--bg); border-radius: var(--radius-sm);
+        padding: 12px 14px; margin-bottom: 10px;
+    }
+    .avatar-stack {
+        display: flex;
+    }
+    .avatar {
+        width: 32px; height: 32px; border-radius: 50%;
+        background: linear-gradient(135deg, var(--green), var(--green2));
+        color: #fff; font-size: 13px; font-weight: 700;
+        display: flex; align-items: center; justify-content: center;
+        border: 2px solid var(--bg);
+        margin-left: -8px;
+        flex-shrink: 0;
+    }
+    .avatar:first-child { margin-left: 0; }
+    .avatar-more {
+        background: var(--bg2); color: var(--hint);
+    }
+    .invite-btn {
+        margin-left: auto;
+        background: rgba(45,122,62,.12); color: var(--green);
+        border: none; border-radius: 16px;
+        padding: 6px 14px; font-size: 13px; font-weight: 600;
+        cursor: pointer;
+    }
+
+    /* ── Next step block ───────────────────────────────────────────────────── */
+    .next-step {
+        background: rgba(45,122,62,.08);
+        border: 1px solid rgba(45,122,62,.2);
+        border-radius: var(--radius-sm);
+        padding: 12px 14px; margin-bottom: 10px;
+        display: flex; align-items: center; gap: 10px;
+    }
+    .next-step-icon { font-size: 20px; }
+    .next-step-text { flex: 1; font-size: 14px; font-weight: 500; color: var(--green); }
+    .next-step-btn {
+        background: var(--green); color: #fff;
+        border: none; border-radius: 8px;
+        padding: 6px 12px; font-size: 13px; font-weight: 600;
+        cursor: pointer;
+    }
+
+    /* ── Tabs ──────────────────────────────────────────────────────────────── */
+    .tabs-wrap {
+        position: sticky; top: 0; z-index: 20;
+        background: var(--bg2); padding: 0 0 8px;
+    }
+    .tabs {
+        display: flex; gap: 0;
+        background: var(--bg); border-radius: 10px;
+        padding: 3px; box-shadow: var(--shadow);
+    }
+    .tab {
+        flex: 1; border: none; background: transparent;
+        padding: 9px 4px; border-radius: 8px;
+        font-size: 14px; font-weight: 600; cursor: pointer;
+        color: var(--hint); transition: all .2s;
+    }
+    .tab.active {
+        background: var(--green); color: #fff;
+        box-shadow: 0 2px 8px rgba(45,122,62,.3);
+    }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+
+    /* ── Recipe card ───────────────────────────────────────────────────────── */
+    .recipe-card {
+        display: flex; align-items: center; gap: 12px;
+        padding: 13px 14px; border-bottom: .5px solid var(--divider);
+        position: relative; cursor: pointer;
+        transition: background .15s;
+    }
+    .recipe-card:last-child { border-bottom: none; }
+    .recipe-card:active { background: var(--bg2); }
+    .recipe-stripe {
+        position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
+        border-radius: 0 2px 2px 0;
+    }
+    .recipe-emoji { font-size: 26px; flex-shrink: 0; }
+    .recipe-info { flex: 1; min-width: 0; }
+    .recipe-name { font-size: 15px; font-weight: 600; }
+    .recipe-meta { font-size: 12px; color: var(--hint); margin-top: 2px; }
+
+    /* ── Add recipe button ─────────────────────────────────────────────────── */
+    .add-recipe-btn {
+        display: flex; align-items: center; gap: 10px;
+        padding: 14px 16px; color: var(--green);
+        cursor: pointer; font-size: 15px; font-weight: 600;
+        border: none; background: none; width: 100%;
+    }
+    .add-recipe-btn-circle {
+        width: 32px; height: 32px; border-radius: 50%;
+        background: rgba(45,122,62,.12);
+        display: flex; align-items: center; justify-content: center;
+        font-size: 18px; font-weight: 700; color: var(--green);
+        flex-shrink: 0;
+    }
+
+    /* ── Guests tab ────────────────────────────────────────────────────────── */
+    .guest-row {
+        display: flex; align-items: center; gap: 12px;
+        padding: 12px 14px; border-bottom: .5px solid var(--divider);
+    }
+    .guest-row:last-child { border-bottom: none; }
+    .guest-avatar {
+        width: 40px; height: 40px; border-radius: 50%;
+        display: flex; align-items: center; justify-content: center;
+        color: #fff; font-size: 16px; font-weight: 700; flex-shrink: 0;
+    }
+    .guest-name { font-size: 15px; font-weight: 600; }
+    .guest-role { font-size: 12px; color: var(--hint); }
+    .guest-badge {
+        margin-left: auto; background: var(--bg2);
+        border-radius: 10px; padding: 2px 8px;
+        font-size: 12px; color: var(--hint);
+    }
+
+    /* ── Toast ─────────────────────────────────────────────────────────────── */
+    .toast-wrap {
+        position: fixed; bottom: 24px; left: 50%;
+        transform: translateX(-50%);
+        z-index: 100; pointer-events: none;
+        display: flex; flex-direction: column; align-items: center; gap: 8px;
+        width: calc(100% - 32px); max-width: 400px;
+    }
+    .toast {
+        background: rgba(28,28,30,.9);
+        backdrop-filter: blur(8px);
+        color: #fff; border-radius: 12px;
+        padding: 12px 16px;
+        font-size: 14px; font-weight: 500;
+        display: flex; align-items: center; gap: 10px;
+        opacity: 0; transform: translateY(8px);
+        transition: opacity .2s, transform .2s;
+        pointer-events: auto;
+        width: 100%;
+    }
+    .toast.show { opacity: 1; transform: none; }
+    .toast-undo {
+        margin-left: auto; color: #ffd60a;
+        font-weight: 700; cursor: pointer; font-size: 14px;
+        white-space: nowrap; flex-shrink: 0;
+    }
+
+    /* ── Bottom sheet ──────────────────────────────────────────────────────── */
+    .overlay {
+        position: fixed; inset: 0; background: rgba(0,0,0,.4);
+        z-index: 50; opacity: 0; pointer-events: none;
+        transition: opacity .25s;
+    }
+    .overlay.show { opacity: 1; pointer-events: auto; }
+    .bottom-sheet {
+        position: fixed; bottom: 0; left: 0; right: 0;
+        background: var(--bg); border-radius: 20px 20px 0 0;
+        z-index: 60; padding: 0 0 calc(env(safe-area-inset-bottom) + 16px);
+        transform: translateY(100%);
+        transition: transform .3s cubic-bezier(.32,0,.15,1);
+        max-height: 90vh; overflow-y: auto;
+    }
+    .bottom-sheet.show { transform: none; }
+    .sheet-handle {
+        width: 36px; height: 4px; border-radius: 2px;
+        background: var(--divider); margin: 12px auto 16px;
+    }
+    .sheet-title {
+        font-size: 16px; font-weight: 700;
+        padding: 0 20px 12px; border-bottom: .5px solid var(--divider);
+    }
+    .sheet-item {
+        display: flex; align-items: center; gap: 14px;
+        padding: 14px 20px; cursor: pointer;
+        font-size: 16px; border-bottom: .5px solid var(--divider);
+        transition: background .15s;
+    }
+    .sheet-item:last-child { border-bottom: none; }
+    .sheet-item:active { background: var(--bg2); }
+    .sheet-item-icon { font-size: 22px; width: 28px; text-align: center; }
+    .sheet-item.destructive { color: #ff3b30; }
+
+    /* ── Add recipe sheet form ─────────────────────────────────────────────── */
+    .emoji-picker {
+        display: flex; flex-wrap: wrap; gap: 6px;
+        margin: 8px 0;
+    }
+    .emoji-option {
+        width: 44px; height: 44px; font-size: 24px;
+        border: 2px solid transparent; border-radius: 10px;
+        background: var(--bg2); cursor: pointer;
+        display: flex; align-items: center; justify-content: center;
+        transition: all .15s;
+    }
+    .emoji-option.selected {
+        border-color: var(--green); background: rgba(45,122,62,.08);
+    }
+
+    /* ── Pull-to-refresh ───────────────────────────────────────────────────── */
+    .ptr-indicator {
+        text-align: center; font-size: 13px; color: var(--hint);
+        height: 0; overflow: hidden; transition: height .2s;
+    }
+    .ptr-indicator.visible { height: 40px; display: flex; align-items: center; justify-content: center; }
+
+    /* ── Offline banner ────────────────────────────────────────────────────── */
+    .offline-banner {
+        position: fixed; top: 0; left: 0; right: 0;
+        background: #ff3b30; color: #fff;
+        text-align: center; padding: 8px;
+        font-size: 13px; font-weight: 600;
+        z-index: 200; display: none;
+    }
+    .offline-banner.show { display: block; }
+
+    /* ── Stepper ───────────────────────────────────────────────────────────── */
+    .stepper-row {
+        display: flex; align-items: center;
+        background: var(--bg); border: 1.5px solid var(--divider);
+        border-radius: var(--radius-sm); overflow: hidden;
+        width: fit-content;
+    }
+    .stepper-btn {
+        width: 44px; height: 44px; border: none; background: transparent;
+        font-size: 22px; cursor: pointer; color: var(--green);
+        display: flex; align-items: center; justify-content: center;
+        transition: background .15s; flex-shrink: 0;
+    }
+    .stepper-btn:active { background: var(--bg2); }
+    .stepper-value {
+        min-width: 56px; text-align: center;
+        font-size: 18px; font-weight: 700;
+        padding: 0 4px; user-select: none;
+    }
+
+    /* ── Ingredient row ────────────────────────────────────────────────────── */
+    .ingredient-row {
+        display: flex; align-items: center; gap: 6px;
+        padding: 8px 12px; border-bottom: .5px solid var(--divider);
+    }
+    .ingredient-row:last-child { border-bottom: none; }
+    .ingredient-row .form-input {
+        padding: 9px 10px; font-size: 14px; margin-top: 0;
+    }
+    .ing-name { flex: 2; min-width: 0; }
+    .ing-qty  { width: 72px; flex-shrink: 0; }
+    .ing-unit { width: 64px; flex-shrink: 0; }
+    .ing-del  {
+        width: 30px; height: 30px; border-radius: 50%;
+        background: rgba(255,59,48,.1); color: #ff3b30;
+        border: none; font-size: 14px; cursor: pointer;
+        display: flex; align-items: center; justify-content: center;
+        flex-shrink: 0;
+    }
+    .ing-del:active { background: rgba(255,59,48,.2); }
+
+    /* ── Step row ──────────────────────────────────────────────────────────── */
+    .step-row {
+        display: flex; align-items: flex-start; gap: 8px;
+        padding: 8px 12px; border-bottom: .5px solid var(--divider);
+    }
+    .step-row:last-child { border-bottom: none; }
+    .step-num {
+        width: 22px; height: 22px; border-radius: 50%;
+        background: var(--green); color: #fff;
+        font-size: 11px; font-weight: 700;
+        display: flex; align-items: center; justify-content: center;
+        flex-shrink: 0; margin-top: 11px;
+    }
+    .step-row textarea.form-input {
+        flex: 1; resize: none; min-height: 60px; padding: 9px 10px; font-size: 14px;
+    }
+
+    /* ── Ingredient badge on recipe card ───────────────────────────────────── */
+    .recipe-badge {
+        display: inline-flex; align-items: center; gap: 2px;
+        background: var(--bg2); border-radius: 6px;
+        padding: 1px 6px; font-size: 11px; color: var(--hint);
+        margin-left: 4px; vertical-align: middle;
+    }
+
+    /* ── Misc ──────────────────────────────────────────────────────────────── */
+    .divider { height: .5px; background: var(--divider); margin: 0; }
+    .mb8 { margin-bottom: 8px; }
+    .mb12 { margin-bottom: 12px; }
+    textarea.form-input { resize: none; min-height: 80px; }
+
+    /* ── Library (Мои рецепты) ──────────────────────────────────────────────── */
+    .lib-search {
+        position: relative; margin-bottom: 12px;
+    }
+    .lib-search-input {
+        width: 100%; padding: 11px 14px 11px 40px;
+        background: var(--bg); border: 1.5px solid var(--divider);
+        border-radius: var(--radius-sm); color: var(--text);
+        font-size: 16px; font-family: inherit;
+        outline: none; transition: border-color .15s;
+        -webkit-appearance: none; appearance: none;
+    }
+    .lib-search-input:focus { border-color: var(--green); }
+    .lib-search-icon {
+        position: absolute; left: 12px; top: 50%;
+        transform: translateY(-50%); font-size: 16px;
+        pointer-events: none;
+    }
+    .cat-chips {
+        display: flex; gap: 6px; overflow-x: auto;
+        padding-bottom: 4px; margin-bottom: 12px;
+        scrollbar-width: none;
+    }
+    .cat-chips::-webkit-scrollbar { display: none; }
+    .cat-chip {
+        background: var(--bg); border: 1.5px solid var(--divider);
+        border-radius: 20px; padding: 6px 14px;
+        font-size: 13px; font-weight: 500; cursor: pointer;
+        color: var(--text); white-space: nowrap; flex-shrink: 0;
+        transition: all .15s;
+    }
+    .cat-chip.active { background: var(--green); color: #fff; border-color: var(--green); }
+    .cat-chip:active { transform: scale(.96); }
+    .inv-mode {
+        flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px;
+        padding: 12px 8px; border-radius: 14px; cursor: pointer;
+        background: var(--bg2); border: 2px solid transparent; color: var(--text);
+        transition: all .15s;
+    }
+    .inv-mode.active { border-color: var(--green); background: var(--bg); }
+    .inv-mode:active { transform: scale(.97); }
+    .lib-recipe-card {
+        display: flex; align-items: center; gap: 12px;
+        padding: 13px 14px; border-bottom: .5px solid var(--divider);
+        cursor: pointer; transition: background .15s;
+    }
+    .lib-recipe-card:last-child { border-bottom: none; }
+    .lib-recipe-card:active { background: var(--bg2); }
+    .lib-recipe-emoji { font-size: 28px; flex-shrink: 0; }
+    .lib-recipe-info { flex: 1; min-width: 0; }
+    .lib-recipe-name {
+        font-size: 15px; font-weight: 600; margin-bottom: 2px;
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .lib-recipe-meta { font-size: 12px; color: var(--hint); }
+    .stars { font-size: 12px; letter-spacing: 1px; }
+    .stars .dim { opacity: .25; }
+
+    /* ── Recipe detail screen ──────────────────────────────────────────────── */
+    .rdetail-photo {
+        width: 100%; height: 200px; border-radius: 14px; overflow: hidden;
+        margin-bottom: 12px; background: var(--bg2);
+    }
+    .rdetail-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .rdetail-hero {
+        text-align: center; padding: 20px 16px 12px;
+    }
+    .rdetail-emoji { font-size: 60px; display: block; margin-bottom: 8px; }
+    .rdetail-name  { font-size: 20px; font-weight: 700; line-height: 1.2; }
+    .rdetail-badges {
+        display: flex; flex-wrap: wrap; gap: 6px;
+        justify-content: center; margin-top: 10px;
+    }
+    .rdetail-badge {
+        background: var(--bg2); border-radius: 16px;
+        padding: 4px 12px; font-size: 13px; color: var(--hint);
+    }
+    .rdetail-section-title {
+        font-size: 11px; font-weight: 700; color: var(--hint);
+        text-transform: uppercase; letter-spacing: .5px;
+        padding: 12px 14px 6px;
+    }
+    .rdetail-cat-label {
+        padding: 4px 14px 2px;
+        font-size: 11px; color: var(--hint); font-weight: 600;
+        text-transform: uppercase; letter-spacing: .4px;
+    }
+    .rdetail-ing-row {
+        display: flex; align-items: center;
+        padding: 10px 14px; border-bottom: .5px solid var(--divider);
+        font-size: 14px;
+    }
+    .rdetail-ing-row:last-child { border-bottom: none; }
+    .rdetail-ing-name { flex: 1; }
+    .rdetail-ing-qty { color: var(--hint); font-size: 13px; flex-shrink: 0; margin-left: 8px; }
+    .rdetail-step-row {
+        display: flex; gap: 10px;
+        padding: 10px 14px; border-bottom: .5px solid var(--divider);
+    }
+    .rdetail-step-row:last-child { border-bottom: none; }
+    .rdetail-step-num {
+        width: 22px; height: 22px; border-radius: 50%;
+        background: var(--green); color: #fff;
+        font-size: 11px; font-weight: 700;
+        display: flex; align-items: center; justify-content: center;
+        flex-shrink: 0; margin-top: 2px;
+    }
+    .rdetail-step-text { font-size: 14px; line-height: 1.55; flex: 1; }
+
+    /* ── Shopping list ──────────────────────────────────────────────────────── */
+    .shop-header {
+        display: flex; align-items: center; justify-content: space-between;
+        padding: 12px 14px 8px; border-bottom: .5px solid var(--divider);
+    }
+    .shop-counter {
+        font-size: 13px; color: var(--hint);
+    }
+    .shop-sync-btn {
+        background: none; border: none; font-size: 13px;
+        color: var(--link); cursor: pointer; padding: 0;
+    }
+    .shop-category {
+        padding: 8px 14px 2px;
+        font-size: 11px; font-weight: 700; color: var(--hint);
+        text-transform: uppercase; letter-spacing: .5px;
+    }
+    .shop-item {
+        display: flex; align-items: center; gap: 12px;
+        padding: 11px 14px; border-bottom: .5px solid var(--divider);
+        cursor: pointer; transition: background .15s;
+        -webkit-tap-highlight-color: transparent;
+    }
+    .shop-item:last-child { border-bottom: none; }
+    .shop-item:active { background: var(--bg2); }
+    .shop-item.bought { opacity: .45; }
+    .shop-check {
+        width: 22px; height: 22px; border-radius: 50%;
+        border: 2px solid var(--divider); flex-shrink: 0;
+        display: flex; align-items: center; justify-content: center;
+        transition: all .2s; background: transparent;
+    }
+    .shop-item.bought .shop-check {
+        background: var(--green); border-color: var(--green);
+    }
+    .shop-check-icon { font-size: 11px; color: #fff; display: none; }
+    .shop-item.bought .shop-check-icon { display: block; }
+    .shop-item-name {
+        flex: 1; font-size: 15px;
+    }
+    .shop-item.bought .shop-item-name {
+        text-decoration: line-through;
+    }
+    .shop-item-qty {
+        font-size: 13px; color: var(--hint); flex-shrink: 0;
+    }
+    .shop-del-btn {
+        background: none; border: none; padding: 4px 6px;
+        color: var(--hint); font-size: 14px; cursor: pointer;
+        line-height: 1; flex-shrink: 0; opacity: 0.6;
+        border-radius: 6px;
+    }
+    .shop-del-btn:active { opacity: 1; color: #e53935; }
+    .shop-add-row {
+        display: flex; align-items: center; gap: 8px;
+        padding: 10px 14px; border-top: 1px solid var(--divider);
+        background: var(--bg);
+    }
+    .shop-add-input {
+        flex: 1; border: none; background: var(--bg2);
+        border-radius: 8px; padding: 8px 12px;
+        font-size: 15px; color: var(--text); outline: none;
+    }
+    .shop-add-qty {
+        width: 70px; border: none; background: var(--bg2);
+        border-radius: 8px; padding: 8px 10px;
+        font-size: 15px; color: var(--text); outline: none;
+    }
+    .shop-add-btn {
+        background: var(--btn); color: var(--btn-text);
+        border: none; border-radius: 8px;
+        width: 36px; height: 36px; font-size: 20px;
+        line-height: 1; cursor: pointer; flex-shrink: 0;
+        display: flex; align-items: center; justify-content: center;
+    }
+    .shop-add-btn:active { opacity: .75; }
+    .shop-progress-bar {
+        height: 3px; background: var(--bg2); border-radius: 2px;
+        margin: 0 14px 8px; overflow: hidden;
+    }
+    .shop-progress-fill {
+        height: 100%; background: var(--green); border-radius: 2px;
+        transition: width .3s ease-out; width: 0%;
+    }
+
+    /* ── Referral screen ────────────────────────────────────────────────────── */
+    .ref-hero {
+        background: linear-gradient(135deg, var(--green) 0%, var(--green2) 100%);
+        color: #fff; border-radius: var(--radius); padding: 20px;
+        margin-bottom: 12px; text-align: center;
+    }
+    .ref-hero-title { font-size: 18px; font-weight: 700; margin-bottom: 6px; }
+    .ref-hero-sub { font-size: 13px; opacity: .85; line-height: 1.4; }
+    .ref-stats {
+        display: grid; grid-template-columns: repeat(3, 1fr);
+        gap: 8px; margin-bottom: 12px;
+    }
+    .ref-stat-card {
+        background: var(--bg); border-radius: var(--radius-sm);
+        padding: 14px 8px; text-align: center;
+        box-shadow: var(--shadow);
+    }
+    .ref-stat-card.accent { background: linear-gradient(135deg, var(--green), var(--green2)); color: #fff; }
+    .ref-stat-value { font-size: 22px; font-weight: 700; }
+    .ref-stat-label { font-size: 11px; color: var(--hint); margin-top: 2px; }
+    .ref-stat-card.accent .ref-stat-label { color: rgba(255,255,255,.7); }
+    .ref-details-card { padding: 0; }
+    .ref-detail-row {
+        display: flex; justify-content: space-between; align-items: center;
+        padding: 12px 16px; border-bottom: .5px solid var(--divider);
+    }
+    .ref-detail-row:last-child { border-bottom: none; }
+    .ref-detail-label { font-size: 14px; color: var(--text); }
+    .ref-detail-value { font-size: 14px; font-weight: 600; }
+    .ref-detail-value.accent { color: var(--green); }
+    .ref-link-card { padding: 16px; }
+    .ref-link-label { font-size: 12px; color: var(--hint); margin-bottom: 6px; }
+    .ref-link-value {
+        font-size: 13px; font-family: monospace;
+        background: var(--bg2); padding: 10px 12px;
+        border-radius: 8px; margin-bottom: 12px;
+        word-break: break-all; user-select: all;
+    }
+    .ref-link-actions { display: flex; gap: 8px; }
+    .ref-link-actions .btn { flex: 1; }
+    .ref-history-item {
+        padding: 12px 16px; border-bottom: .5px solid var(--divider);
+    }
+    .ref-history-item:last-child { border-bottom: none; }
+    .ref-history-amount { font-size: 16px; font-weight: 600; }
+    .ref-history-amount.positive { color: var(--green); }
+    .ref-history-amount.negative { color: var(--burgundy); }
+    .ref-history-desc { font-size: 13px; color: var(--hint); margin-top: 2px; }
+    .ref-history-status {
+        font-size: 12px; margin-top: 4px;
+        padding: 2px 8px; border-radius: 10px;
+        display: inline-block;
+    }
+    .ref-history-status.pending { background: #fff3cd; color: #856404; }
+    .ref-history-status.available { background: #d4edda; color: #155724; }
+    .ref-history-status.cancelled { background: #f8d7da; color: #721c24; }
+    .ref-history-status.reversed { background: #f8d7da; color: #721c24; }
+    </style>
+</head>
+<body>
+
+<!-- Offline banner -->
+<div id="offline-banner" class="offline-banner">Нет соединения с интернетом</div>
+
+<!-- ══ SCREEN: Loading ══════════════════════════════════════════════════════ -->
+<div id="s-loading" class="screen active">
+    <div class="loading-wrap">
+        <div style="font-size:56px">🌿</div>
+        <div style="color:var(--hint);font-size:15px">Загружаем ПОЛЯНУ…</div>
+    </div>
+</div>
+
+<!-- ══ SCREEN: Auth required ═══════════════════════════════════════════════ -->
+<div id="s-auth" class="screen">
+    <div class="auth-wrap">
+        <div class="auth-icon">🌿</div>
+        <div class="auth-title">Откройте через Telegram</div>
+        <div class="auth-sub">ПОЛЯНА работает внутри Telegram. Откройте бота <b>@reciptesbot</b> и нажмите «Открыть ПОЛЯНУ».</div>
+        <a href="https://t.me/reciptesbot" class="btn btn-green" style="max-width:280px">Открыть бота</a>
+    </div>
+</div>
+
+<!-- ══ SCREEN: Home ═════════════════════════════════════════════════════════ -->
+<div id="s-home" class="screen">
+    <div class="page" id="home-page">
+        <div class="ptr-indicator" id="ptr-indicator">Обновление…</div>
+
+        <!-- Greeting -->
+        <div class="greeting-row">
+            <div>
+                <div class="greeting-name" id="greeting-name">Привет! 👋</div>
+                <div class="greeting-sub" id="greeting-sub">Что планируем?</div>
+            </div>
+            <button class="settings-btn" onclick="openSettings()" aria-label="Настройки">⚙️</button>
+        </div>
+
+        <!-- Hero skeleton / card -->
+        <div id="hero-skeleton" class="skeleton skeleton-hero"></div>
+        <div id="hero-card" class="hero-card" style="display:none" onclick="openHeroEvent()">
+            <div>
+                <div class="hero-label">🔥 Ближайшее</div>
+                <div class="hero-name" id="hero-name">—</div>
+                <div class="hero-meta" id="hero-meta">—</div>
+            </div>
+            <div class="hero-bottom">
+                <div class="hero-stats" id="hero-stats"></div>
+                <div class="progress-wrap">
+                    <div class="progress-track">
+                        <div class="progress-fill" id="hero-progress"></div>
+                    </div>
+                    <div class="progress-label" id="hero-progress-label"></div>
+                </div>
+            </div>
+        </div>
+        <div id="hero-empty" style="display:none"></div>
+
+        <!-- Quick actions -->
+        <div class="section-header">
+            <span class="section-title">Быстрые действия</span>
+        </div>
+        <div class="quick-actions mb12">
+            <button class="quick-btn" onclick="goCreate()">
+                <span class="quick-btn-icon">➕</span>
+                <span class="quick-btn-label">Событие</span>
+            </button>
+            <button class="quick-btn" onclick="goRecipes()">
+                <span class="quick-btn-icon">📖</span>
+                <span class="quick-btn-label">Рецепты</span>
+            </button>
+            <button class="quick-btn" onclick="openReferral()">
+                <span class="quick-btn-icon">🎁</span>
+                <span class="quick-btn-label">Друзья</span>
+            </button>
+        </div>
+
+        <!-- Upcoming events -->
+        <div class="section-header">
+            <span class="section-title" id="events-section-title">Предстоящие</span>
+        </div>
+        <div class="card" id="events-list-wrap">
+            <!-- skeleton rows -->
+            <div id="events-skeleton">
+                <div class="skeleton-row">
+                    <div class="skeleton skeleton-circle"></div>
+                    <div class="skeleton-lines">
+                        <div class="skeleton skeleton-line"></div>
+                        <div class="skeleton skeleton-line short"></div>
+                    </div>
+                </div>
+                <div class="skeleton-row">
+                    <div class="skeleton skeleton-circle"></div>
+                    <div class="skeleton-lines">
+                        <div class="skeleton skeleton-line"></div>
+                        <div class="skeleton skeleton-line short"></div>
+                    </div>
+                </div>
+                <div class="skeleton-row">
+                    <div class="skeleton skeleton-circle"></div>
+                    <div class="skeleton-lines">
+                        <div class="skeleton skeleton-line"></div>
+                        <div class="skeleton skeleton-line short"></div>
+                    </div>
+                </div>
+            </div>
+            <div id="events-list"></div>
+        </div>
+
+        <!-- Past events (collapsed) -->
+        <div id="past-wrap" style="display:none">
+            <div class="card">
+                <div class="collapsible-header" onclick="togglePast(this)">
+                    <span class="collapsible-arrow" id="past-arrow">▶</span>
+                    <span id="past-label">Прошедшие (0)</span>
+                </div>
+                <div id="past-list" style="display:none"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- FAB -->
+    <button class="fab" onclick="goCreate()" aria-label="Создать событие">＋</button>
+</div>
+
+<!-- ══ SCREEN: Create event ═════════════════════════════════════════════════ -->
+<div id="s-create" class="screen">
+    <div class="page">
+        <div class="greeting-row" style="margin-bottom:16px">
+            <div class="greeting-name">Новое событие</div>
+            <button class="settings-btn" onclick="goHome()" aria-label="Закрыть">✕</button>
+        </div>
+
+        <!-- Templates -->
+        <label class="form-label">Шаблон</label>
+        <div class="template-row" id="template-row">
+            <button class="tpl-btn" data-tpl="shashlyki" onclick="applyTemplate(this)">
+                <span class="tpl-emoji">🔥</span>
+                <span class="tpl-name">Шашлыки</span>
+            </button>
+            <button class="tpl-btn" data-tpl="birthday" onclick="applyTemplate(this)">
+                <span class="tpl-emoji">🎂</span>
+                <span class="tpl-name">День рождения</span>
+            </button>
+            <button class="tpl-btn" data-tpl="newyear" onclick="applyTemplate(this)">
+                <span class="tpl-emoji">🎄</span>
+                <span class="tpl-name">Новый год</span>
+            </button>
+            <button class="tpl-btn active" data-tpl="" onclick="applyTemplate(this)">
+                <span class="tpl-emoji">✨</span>
+                <span class="tpl-name">Своё</span>
+            </button>
+        </div>
+
+        <!-- Name -->
+        <label class="form-label" for="ev-name">Название *</label>
+        <input class="form-input" id="ev-name" type="text" placeholder="Шашлыки у Димы" maxlength="80"
+               autocomplete="off" onblur="validateName()" oninput="saveDraft()">
+        <div class="form-error" id="ev-name-err" style="display:none"></div>
+
+        <!-- Date/time -->
+        <label class="form-label">Когда *</label>
+        <div class="quick-date-chips" id="quick-dates">
+            <button class="quick-chip" onclick="setQuickDate('today',this)">⚡ Сегодня</button>
+            <button class="quick-chip" onclick="setQuickDate('tomorrow',this)">Завтра</button>
+            <button class="quick-chip" onclick="setQuickDate('weekend',this)">Выходные</button>
+        </div>
+        <div class="date-row">
+            <input class="form-input" id="ev-date" type="date" onchange="clearQuickDate(); saveDraft()">
+            <input class="form-input" id="ev-time" type="time" onchange="saveDraft()">
+        </div>
+        <div class="form-error" id="ev-date-err" style="display:none"></div>
+
+        <!-- Location -->
+        <label class="form-label" for="ev-location">Где</label>
+        <input class="form-input" id="ev-location" type="text" placeholder="Дача в Подмосковье"
+               maxlength="120" autocomplete="off" oninput="saveDraft()">
+
+        <!-- Collapsible extra -->
+        <div class="collapsible-section">
+            <div class="collapsible-toggle" onclick="toggleExtra(this)">
+                <span>▶ Описание и доп. опции</span>
+            </div>
+            <div class="collapsible-body" id="extra-body">
+                <label class="form-label" for="ev-desc">Описание</label>
+                <textarea class="form-input" id="ev-desc" placeholder="Что планируем…"
+                          rows="3" oninput="saveDraft()"></textarea>
+            </div>
+        </div>
+
+        <div style="height:20px"></div>
+    </div>
+</div>
+
+<!-- ══ SCREEN: Event detail ═════════════════════════════════════════════════ -->
+<div id="s-detail" class="screen">
+    <div class="page" id="detail-page">
+        <!-- Header -->
+        <div class="detail-header">
+            <button class="detail-back" onclick="goHome()" aria-label="Назад">←</button>
+            <div class="detail-title" id="detail-title">—</div>
+            <button class="detail-menu-btn" onclick="openEventMenu()" aria-label="Меню">⋯</button>
+        </div>
+
+        <!-- Progress -->
+        <div class="card mb12" style="padding:14px 16px">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+                <span style="font-size:14px;font-weight:600">Готовность события</span>
+                <span id="detail-progress-pct" style="font-size:14px;color:var(--green);font-weight:700">0%</span>
+            </div>
+            <div class="card-progress-track">
+                <div class="card-progress-fill" id="detail-progress-fill"></div>
+            </div>
+        </div>
+
+        <!-- Info -->
+        <div class="event-info-bar" id="detail-info-bar"></div>
+
+        <!-- Collaborators -->
+        <div class="collabs-row" id="collabs-row">
+            <div class="avatar-stack" id="avatar-stack"></div>
+            <button class="invite-btn" onclick="inviteCollab()">＋ Пригласить</button>
+        </div>
+
+        <!-- Create invitation image -->
+        <button class="btn btn-outline" style="margin-bottom:12px" onclick="openInviteScreen()">
+            🎨 Сделать приглашение-картинку
+        </button>
+
+        <!-- Next step -->
+        <div class="next-step" id="next-step-block" style="display:none">
+            <span class="next-step-icon">💡</span>
+            <span class="next-step-text" id="next-step-text"></span>
+            <button class="next-step-btn" onclick="nextStepAction()" id="next-step-action-btn">Добавить</button>
+        </div>
+
+        <!-- Tabs -->
+        <div class="tabs-wrap">
+            <div class="tabs">
+                <button class="tab active" onclick="switchTab('menu',this)">Меню</button>
+                <button class="tab" onclick="switchTab('guests',this)">Гости</button>
+                <button class="tab" onclick="switchTab('shopping',this)">Покупки</button>
+            </div>
+        </div>
+
+        <!-- Tab: Меню -->
+        <div class="tab-content active card" id="tab-menu">
+            <div id="recipes-list"></div>
+            <button class="add-recipe-btn" onclick="openAddRecipe()">
+                <div class="add-recipe-btn-circle">＋</div>
+                <span>Добавить блюдо</span>
+            </button>
+        </div>
+
+        <!-- Tab: Гости -->
+        <div class="tab-content card" id="tab-guests">
+            <div id="guests-list"></div>
+        </div>
+
+        <!-- Tab: Покупки -->
+        <div class="tab-content card" id="tab-shopping">
+            <div id="shopping-list-inner"></div>
+        </div>
+    </div>
+</div>
+
+<!-- ══ SCREEN: Recipe form ══════════════════════════════════════════════════ -->
+<div id="s-recipe" class="screen">
+    <div class="page" id="recipe-page">
+        <div class="greeting-row" style="margin-bottom:16px">
+            <div class="greeting-name" id="recipe-screen-title">Новый рецепт</div>
+            <button class="settings-btn" onclick="cancelRecipe()" aria-label="Закрыть">✕</button>
+        </div>
+
+        <label class="form-label">Эмодзи блюда</label>
+        <div class="emoji-picker" id="recipe-emoji-picker"></div>
+
+        <label class="form-label" for="recipe-name-full">Название *</label>
+        <input class="form-input" id="recipe-name-full" type="text"
+               placeholder="Шашлык из свинины" maxlength="80" autocomplete="off">
+
+        <div style="display:flex;gap:24px;flex-wrap:wrap;align-items:flex-end;margin-top:4px">
+            <div>
+                <label class="form-label">Порций</label>
+                <div class="stepper-row">
+                    <button class="stepper-btn" onclick="stepServings(-1)">−</button>
+                    <span id="servings-display" class="stepper-value">4</span>
+                    <button class="stepper-btn" onclick="stepServings(1)">＋</button>
+                </div>
+            </div>
+            <div style="flex:1;min-width:110px">
+                <label class="form-label" for="recipe-cook-time">Время готовки</label>
+                <div style="position:relative">
+                    <input class="form-input" id="recipe-cook-time" type="number"
+                           placeholder="60" min="1" max="999">
+                    <span style="position:absolute;right:12px;top:50%;transform:translateY(-50%);color:var(--hint);font-size:13px;pointer-events:none">мин.</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Ingredients -->
+        <div class="section-header" style="margin-top:20px">
+            <span class="section-title">Ингредиенты</span>
+        </div>
+        <div style="background:var(--bg2);border-radius:4px;padding:4px 12px 2px;margin-bottom:4px">
+            <div style="display:flex;gap:6px;font-size:11px;font-weight:600;color:var(--hint);text-transform:uppercase;letter-spacing:.3px">
+                <span style="flex:2">Название</span>
+                <span style="width:72px">Кол-во</span>
+                <span style="width:64px">Ед.</span>
+                <span style="width:30px"></span>
+            </div>
+        </div>
+        <div class="card" id="ingredients-list">
+            <div id="ing-empty" style="padding:16px;text-align:center;color:var(--hint);font-size:14px">
+                Нажмите «＋ Ингредиент», чтобы добавить
+            </div>
+        </div>
+        <button class="btn btn-outline btn-sm" onclick="addIngredientRow()" style="margin-top:8px;width:auto;padding:9px 20px">
+            ＋ Ингредиент
+        </button>
+
+        <!-- Steps (collapsible) -->
+        <div class="collapsible-section" style="margin-top:20px">
+            <div class="collapsible-toggle" onclick="toggleSteps(this)">
+                <span>▶ Шаги приготовления</span>
+            </div>
+            <div class="collapsible-body" id="steps-body">
+                <div id="steps-list">
+                    <div style="padding:6px 0 10px;color:var(--hint);font-size:13px">
+                        Шаги не обязательны, но помогут вспомнить рецепт
+                    </div>
+                </div>
+                <button class="btn btn-outline btn-sm" onclick="addStepRow()" style="margin-top:4px;width:auto;padding:9px 20px">
+                    ＋ Шаг
+                </button>
+            </div>
+        </div>
+
+        <div style="height:28px"></div>
+    </div>
+</div>
+
+<!-- ══ SCREEN: Recipe Detail ════════════════════════════════════════════════ -->
+<div id="s-rdetail" class="screen">
+    <div class="page">
+        <div class="detail-header">
+            <button class="detail-back" onclick="closeRdetail()" aria-label="Назад">←</button>
+            <div class="detail-title" id="rdetail-title">—</div>
+            <button class="detail-menu-btn" onclick="openRdetailMenu()" aria-label="Меню">⋯</button>
+        </div>
+        <div id="rdetail-body"></div>
+    </div>
+</div>
+
+<!-- ══ SCREEN: Pick recipe from library ═════════════════════════════════════ -->
+<div id="s-pick-recipe" class="screen">
+    <div class="page">
+        <div class="detail-header">
+            <button class="detail-back" onclick="closePicker()" aria-label="Назад">←</button>
+            <div class="detail-title">Из библиотеки</div>
+        </div>
+        <div class="lib-search">
+            <span class="lib-search-icon">🔍</span>
+            <input class="lib-search-input" id="picker-search" type="search"
+                   placeholder="Поиск рецептов…" autocomplete="off"
+                   oninput="debouncedPickerSearch()">
+        </div>
+        <div class="card" id="picker-list-wrap">
+            <div id="picker-list"></div>
+        </div>
+        <div style="padding:16px 0 0;text-align:center">
+            <button class="btn btn-outline btn-sm"
+                    style="width:auto;padding:10px 28px"
+                    onclick="closePicker();openRecipeScreen(PICKER.eventId)">
+                ✨ Создать новый рецепт
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- ══ SCREEN: Invitation generator ════════════════════════════════════════ -->
+<div id="s-invite" class="screen">
+    <div class="page">
+        <div class="detail-header">
+            <button class="detail-back" onclick="closeInvite()" aria-label="Назад">←</button>
+            <div class="detail-title">Приглашение</div>
+        </div>
+
+        <!-- Theme chips -->
+        <div class="cat-chips" id="inv-themes" style="margin-bottom:14px"></div>
+
+        <!-- Preview -->
+        <div id="inv-preview" style="background:var(--bg2);border-radius:16px;min-height:320px;display:flex;align-items:center;justify-content:center;overflow:hidden;margin-bottom:14px">
+            <div id="inv-preview-empty" style="padding:32px 24px;text-align:center;color:var(--hint);font-size:14px">
+                Выберите оформление и нажмите «Создать»
+            </div>
+            <img id="inv-img" alt="Приглашение" style="display:none;width:100%;max-width:360px;border-radius:12px">
+        </div>
+
+        <!-- Actions -->
+        <button class="btn btn-green" id="inv-gen-btn" onclick="genInvite()">Создать приглашение</button>
+        <div id="inv-after" style="display:none;gap:10px;margin-top:10px">
+            <button class="btn btn-green" style="flex:1" onclick="sendInviteToChat()">📤 В чат</button>
+        </div>
+    </div>
+</div>
+
+<!-- ══ SCREEN: Shared (guest view) ═════════════════════════════════════════ -->
+<div id="s-shared" class="screen">
+    <div class="page">
+        <div class="card" style="padding:24px 20px;text-align:center;margin-top:24px">
+            <div style="font-size:48px;margin-bottom:12px">🎉</div>
+            <div style="font-size:18px;font-weight:700;margin-bottom:6px" id="shared-name">—</div>
+            <div style="font-size:14px;color:var(--hint);margin-bottom:20px" id="shared-meta">—</div>
+            <a id="shared-open-btn" href="#" class="btn btn-green">🌿 Открыть в боте</a>
+        </div>
+    </div>
+</div>
+
+<!-- ══ SCREEN: My Recipes Library ═══════════════════════════════════════════ -->
+<div id="s-recipes" class="screen">
+    <div class="page">
+        <!-- Header -->
+        <div class="detail-header">
+            <button class="detail-back" onclick="goHome()" aria-label="Назад">←</button>
+            <div class="detail-title">Мои рецепты</div>
+            <div id="lib-count-badge" style="font-size:13px;color:var(--hint);flex-shrink:0"></div>
+        </div>
+
+        <!-- Search -->
+        <div class="lib-search">
+            <span class="lib-search-icon">🔍</span>
+            <input class="lib-search-input" id="lib-search" type="search"
+                   placeholder="Поиск рецептов…" autocomplete="off"
+                   oninput="debouncedLibSearch()">
+        </div>
+
+        <!-- Category chips -->
+        <div class="cat-chips" id="cat-chips">
+            <button class="cat-chip active" data-cat="" onclick="libFilterCat(this)">Все</button>
+            <button class="cat-chip" data-cat="ужин" onclick="libFilterCat(this)">🍽 Ужин</button>
+            <button class="cat-chip" data-cat="завтрак" onclick="libFilterCat(this)">🌅 Завтрак</button>
+            <button class="cat-chip" data-cat="десерт" onclick="libFilterCat(this)">🍰 Десерт</button>
+            <button class="cat-chip" data-cat="суп" onclick="libFilterCat(this)">🍲 Суп</button>
+            <button class="cat-chip" data-cat="закуска" onclick="libFilterCat(this)">🥗 Закуска</button>
+        </div>
+
+        <!-- Recipe list -->
+        <div class="card" id="lib-list-wrap">
+            <div id="lib-list"></div>
+        </div>
+    </div>
+    <!-- FAB: add recipe -->
+    <button class="fab" onclick="openLibAddRecipe()" aria-label="Добавить рецепт">＋</button>
+</div>
+
+<!-- ══ SCREEN: Referral ════════════════════════════════════════════════════ -->
+<div id="s-referral" class="screen">
+    <div class="page">
+        <!-- Header -->
+        <div class="detail-header">
+            <button class="detail-back" onclick="goHome()" aria-label="Назад">←</button>
+            <div class="detail-title">Пригласить друзей</div>
+            <div></div>
+        </div>
+
+        <!-- Hero banner -->
+        <div class="ref-hero">
+            <div class="ref-hero-title">Пользуйтесь ИИ бесплатно</div>
+            <div class="ref-hero-sub">Получайте 10% от пополнений приглашённых друзей бонусными баллами.</div>
+        </div>
+
+        <!-- Balance cards -->
+        <div class="ref-stats" id="ref-stats">
+            <div class="ref-stat-card">
+                <div class="ref-stat-value" id="ref-paid">0</div>
+                <div class="ref-stat-label">Куплено</div>
+            </div>
+            <div class="ref-stat-card accent">
+                <div class="ref-stat-value" id="ref-bonus">0</div>
+                <div class="ref-stat-label">Бонусных</div>
+            </div>
+            <div class="ref-stat-card">
+                <div class="ref-stat-value" id="ref-pending">0</div>
+                <div class="ref-stat-label">Ожидают</div>
+            </div>
+        </div>
+
+        <!-- Stats -->
+        <div class="card ref-details-card">
+            <div class="ref-detail-row">
+                <span class="ref-detail-label">Приглашено</span>
+                <span class="ref-detail-value" id="ref-invited">0</span>
+            </div>
+            <div class="ref-detail-row">
+                <span class="ref-detail-label">Активных</span>
+                <span class="ref-detail-value" id="ref-activated">0</span>
+            </div>
+            <div class="ref-detail-row">
+                <span class="ref-detail-label">Совершили оплату</span>
+                <span class="ref-detail-value" id="ref-paying">0</span>
+            </div>
+            <div class="ref-detail-row">
+                <span class="ref-detail-label">Получено всего</span>
+                <span class="ref-detail-value accent" id="ref-total-reward">0 баллов</span>
+            </div>
+        </div>
+
+        <!-- Referral link -->
+        <div class="card ref-link-card">
+            <div class="ref-link-label">Ваша ссылка</div>
+            <div class="ref-link-value" id="ref-link">—</div>
+            <div class="ref-link-actions">
+                <button class="btn btn-sm btn-green" onclick="shareReferralLink()">📨 Пригласить друга</button>
+                <button class="btn btn-sm btn-outline" onclick="copyReferralLink()">🔗 Скопировать ссылку</button>
+            </div>
+        </div>
+
+        <!-- History -->
+        <div class="section-header">
+            <span class="section-title">История начислений</span>
+        </div>
+        <div class="card" id="ref-history-wrap">
+            <div id="ref-history"></div>
+        </div>
+
+        <!-- Rules link -->
+        <div style="text-align:center;padding:16px 0">
+            <button class="btn btn-sm btn-outline" onclick="showRefRules()">📄 Правила программы</button>
+        </div>
+    </div>
+</div>
+
+<!-- ══ Onboarding Screen ════════════════════════════════════════════════════ -->
+<div id="s-onboarding" class="screen">
+    <div style="padding:20px 20px 40px;max-width:480px;margin:0 auto">
+        <div id="ob-step-text" style="font-size:17px;line-height:1.6;margin-bottom:24px"></div>
+        <div id="ob-buttons"></div>
+    </div>
+</div>
+
+<!-- ══ Documents Screen ═════════════════════════════════════════════════════ -->
+<div id="s-documents" class="screen">
+    <div style="padding:20px">
+        <h2 style="font-size:20px;margin-bottom:8px">📄 Документы ПОЛЯНЫ</h2>
+        <p style="color:var(--hint);font-size:14px;margin-bottom:20px">Ознакомьтесь с условиями использования и политикой данных.</p>
+        <div id="docs-list"></div>
+    </div>
+</div>
+
+<!-- ══ Document Viewer Screen ═══════════════════════════════════════════════ -->
+<div id="s-doc-viewer" class="screen">
+    <div style="padding:20px">
+        <div id="doc-viewer-title" style="font-size:20px;font-weight:600;margin-bottom:16px"></div>
+        <div id="doc-viewer-content" style="font-size:15px;line-height:1.7;white-space:pre-wrap;color:var(--text)"></div>
+        <div id="doc-viewer-actions" style="margin-top:24px"></div>
+    </div>
+</div>
+
+<!-- ══ Privacy Screen ═══════════════════════════════════════════════════════ -->
+<div id="s-privacy" class="screen">
+    <div style="padding:20px">
+        <h2 style="font-size:20px;margin-bottom:16px">🔒 Данные и конфиденциальность</h2>
+        <div class="card" style="margin-bottom:12px">
+            <div style="font-weight:600;margin-bottom:8px">Статус согласий</div>
+            <div id="privacy-status" style="font-size:14px;color:var(--hint)"></div>
+        </div>
+        <div class="card" style="margin-bottom:12px">
+            <div style="font-weight:600;margin-bottom:12px">Управление</div>
+            <button class="btn btn-sm btn-outline" style="width:100%;margin-bottom:8px" onclick="openDocuments()">📄 Документы</button>
+            <button class="btn btn-sm btn-outline" style="width:100%;margin-bottom:8px" onclick="exportData()">📥 Скачать мои данные</button>
+            <button class="btn btn-sm btn-outline" style="width:100%;margin-bottom:8px;color:var(--burgundy);border-color:var(--burgundy)" onclick="requestDelete()">🗑 Удалить аккаунт</button>
+        </div>
+    </div>
+</div>
+
+<!-- ══ Overlays ═══════════════════════════════════════════════════════════ -->
+<div id="overlay" class="overlay" onclick="closeSheet()"></div>
+
+<!-- Bottom sheet (generic menu) -->
+<div id="bottom-sheet" class="bottom-sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-title" id="sheet-title"></div>
+    <div id="sheet-body"></div>
+</div>
+
+<!-- Add recipe sheet -->
+<div id="add-recipe-sheet" class="bottom-sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-title">Добавить блюдо</div>
+    <div style="padding:0 20px 20px">
+        <label class="form-label">Эмодзи</label>
+        <div class="emoji-picker" id="emoji-picker">
+            <button class="emoji-option selected" data-emoji="🥩" onclick="selectEmoji(this)">🥩</button>
+            <button class="emoji-option" data-emoji="🐟" onclick="selectEmoji(this)">🐟</button>
+            <button class="emoji-option" data-emoji="🥗" onclick="selectEmoji(this)">🥗</button>
+            <button class="emoji-option" data-emoji="🍝" onclick="selectEmoji(this)">🍝</button>
+            <button class="emoji-option" data-emoji="🍰" onclick="selectEmoji(this)">🍰</button>
+            <button class="emoji-option" data-emoji="🥘" onclick="selectEmoji(this)">🥘</button>
+            <button class="emoji-option" data-emoji="🍲" onclick="selectEmoji(this)">🍲</button>
+            <button class="emoji-option" data-emoji="🥞" onclick="selectEmoji(this)">🥞</button>
+        </div>
+        <label class="form-label" for="recipe-name-input">Название *</label>
+        <input class="form-input" id="recipe-name-input" type="text" placeholder="Шашлык из свинины"
+               maxlength="80" autocomplete="off">
+        <label class="form-label" for="recipe-servings">Порций</label>
+        <input class="form-input" id="recipe-servings" type="number" value="4" min="1" max="100">
+        <button class="btn btn-green" style="margin-top:16px" onclick="submitRecipe()">Добавить блюдо</button>
+    </div>
+</div>
+
+<!-- Email-for-receipt sheet (card top-up, 54-ФЗ) -->
+<div id="email-sheet" class="bottom-sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-title">Email для чека</div>
+    <div style="padding:0 20px 20px">
+        <div style="font-size:13px;color:var(--hint);margin-bottom:10px">
+            На него ЮКасса пришлёт фискальный чек об оплате.
+        </div>
+        <input class="form-input" id="topup-email" type="email" inputmode="email"
+               placeholder="you@example.com" autocomplete="email" maxlength="120"
+               oninput="onEmailInput()"
+               onkeydown="if(event.key==='Enter')submitEmailTopup()">
+        <div class="form-error" id="topup-email-err" style="display:none">Введите корректный email</div>
+        <button class="btn btn-green" id="topup-email-btn" style="margin-top:16px" disabled
+                onclick="submitEmailTopup()">Продолжить к оплате</button>
+    </div>
+</div>
+
+<!-- Toast container -->
+<div class="toast-wrap">
+    <div id="toast" class="toast"></div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════════════
+// CONFIG
+// ═══════════════════════════════════════════════════════════════════════════
+const API = 'https://polyana.coiqa.ru/api';
+const BOT  = 'reciptesbot';
+const APP_VERSION = '2.2.0';
+const BUILD_DATE = '2026-07-26';
+
+// ═══════════════════════════════════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════════════════════════════════
+const S = {
+    tg: null,
+    user: null,
+    initData: '',
+    events: [],
+    currentEvent: null,
+    currentTab: 'menu',
+    pendingDeleteRecipe: null,  // for undo toast
+    pendingDeleteEvent: null,
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// UTILS
+// ═══════════════════════════════════════════════════════════════════════════
+const $ = id => document.getElementById(id);
+
+function showScreen(id) {
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    $(id).classList.add('active');
+}
+
+function esc(s) {
+    return String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
+}
+
+function formatDate(iso) {
+    if (!iso) return '—';
+    const d = new Date(iso);
+    if (isNaN(d)) return '—';
+    const months = ['янв','фев','мар','апр','мая','июн','июл','авг','сен','окт','ноя','дек'];
+    const days = ['вс','пн','вт','ср','чт','пт','сб'];
+    return `${days[d.getDay()]}, ${d.getDate()} ${months[d.getMonth()]} · ${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')}`;
+}
+
+function daysUntil(iso) {
+    if (!iso) return null;
+    const diff = Math.ceil((new Date(iso) - Date.now()) / 86400000);
+    if (diff === 0) return 'сегодня';
+    if (diff === 1) return 'завтра';
+    if (diff > 0) return `через ${diff} дн.`;
+    return `${Math.abs(diff)} дн. назад`;
+}
+
+function isPast(iso) {
+    if (!iso) return false;
+    return new Date(iso) < Date.now();
+}
+
+function templateEmoji(tpl) {
+    return {shashlyki:'🔥',birthday:'🎂',newyear:'🎄'}[tpl] || '🎉';
+}
+
+// Author color palette (10 colors)
+const AUTHOR_COLORS = ['#2d7a3e','#1a73e8','#e67e22','#9b59b6','#e91e63','#00bcd4','#ff5722','#607d8b','#795548','#4caf50'];
+function authorColor(uid) {
+    return AUTHOR_COLORS[(Number(uid)||0) % AUTHOR_COLORS.length];
+}
+
+function initials(name) {
+    return (name||'?').trim().split(/\s+/).map(w=>w[0]||'').join('').toUpperCase().slice(0,2);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// HAPTIC
+// ═══════════════════════════════════════════════════════════════════════════
+function haptic(type='light') {
+    try { S.tg?.HapticFeedback?.impactOccurred?.(type); } catch {}
+}
+function hapticNotif(type='success') {
+    try { S.tg?.HapticFeedback?.notificationOccurred?.(type); } catch {}
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// API
+// ═══════════════════════════════════════════════════════════════════════════
+async function api(path, method='GET', body=null, timeoutMs=20000) {
+    const opts = {
+        method,
+        headers: {
+            'Content-Type': 'application/json',
+            'X-Telegram-Init-Data': S.initData,
+        },
+    };
+    if (body) opts.body = JSON.stringify(body);
+
+    // Retry once on a transient network failure ("Failed to fetch" = no response
+    // received, e.g. backend mid-redeploy). Safe because the server never processed it.
+    let lastErr;
+    for (let attempt = 0; attempt < 2; attempt++) {
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+        opts.signal = ctrl.signal;
+        try {
+            const r = await fetch(API + path, opts);
+            if (!r.ok) {
+                const msg = await r.text().catch(()=>'');
+                throw Object.assign(new Error(msg||`HTTP ${r.status}`), {status: r.status});
+            }
+            if (r.status === 204) return null;
+            return r.json();
+        } catch (e) {
+            if (e.name === 'AbortError') {
+                throw Object.assign(new Error('Превышено время ожидания'), {status: 0, timeout: true});
+            }
+            // Only retry true network errors (TypeError), never HTTP error responses
+            const isNetwork = (e instanceof TypeError) && e.status === undefined;
+            lastErr = e;
+            if (isNetwork && attempt === 0) {
+                await new Promise(res => setTimeout(res, 800));
+                continue;
+            }
+            throw e;
+        } finally {
+            clearTimeout(timer);
+        }
+    }
+    throw lastErr;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TOAST
+// ═══════════════════════════════════════════════════════════════════════════
+let _toastTimer = null;
+function toast(msg, undoFn=null, duration=3000) {
+    const el = $('toast');
+    el.innerHTML = esc(msg) + (undoFn ? `<span class="toast-undo" id="toast-undo">Отменить</span>` : '');
+    el.classList.add('show');
+    if (undoFn) {
+        $('toast-undo').onclick = () => { undoFn(); hideToast(); };
+    }
+    clearTimeout(_toastTimer);
+    _toastTimer = setTimeout(hideToast, duration);
+}
+function hideToast() {
+    $('toast').classList.remove('show');
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// BOTTOM SHEET
+// ═══════════════════════════════════════════════════════════════════════════
+function openSheet(title, items) {
+    $('sheet-title').textContent = title;
+    $('sheet-body').innerHTML = items.map(item =>
+        `<div class="sheet-item${item.destructive?' destructive':''}" onclick="${item.fn}">
+            <span class="sheet-item-icon">${item.icon}</span>
+            <span>${esc(item.label)}</span>
+        </div>`
+    ).join('');
+    $('overlay').classList.add('show');
+    $('bottom-sheet').classList.add('show');
+}
+
+function closeSheet() {
+    $('overlay').classList.remove('show');
+    $('bottom-sheet').classList.remove('show');
+    $('add-recipe-sheet').classList.remove('show');
+    $('email-sheet')?.classList.remove('show');
+}
+
+function openAddRecipe() {
+    if (!S.currentEvent) return;
+    haptic();
+    openSheet('Добавить рецепт', [
+        {icon: '📚', label: 'Из библиотеки', fn: 'closeSheet();openLibraryPicker(' + S.currentEvent.id + ')'},
+        {icon: '✨', label: 'Новый рецепт',   fn: 'closeSheet();openRecipeScreen(' + S.currentEvent.id + ')'},
+    ]);
+}
+
+function selectEmoji(el) {
+    document.querySelectorAll('.emoji-option').forEach(e => e.classList.remove('selected'));
+    el.classList.add('selected');
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// MAIN BUTTON helper
+// ═══════════════════════════════════════════════════════════════════════════
+function setMainBtn(text, fn, visible=true) {
+    if (!S.tg?.MainButton) return;
+    S.tg.MainButton.offClick(_mainBtnHandler);
+    _mainBtnHandler = fn || (()=>{});
+    if (visible) {
+        S.tg.MainButton.setText(text);
+        S.tg.MainButton.onClick(_mainBtnHandler);
+        S.tg.MainButton.show();
+    } else {
+        S.tg.MainButton.hide();
+    }
+}
+let _mainBtnHandler = ()=>{};
+
+function hideMainBtn() {
+    S.tg?.MainButton?.hide?.();
+    S.tg?.MainButton?.offClick?.(_mainBtnHandler);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// BACK BUTTON
+// ═══════════════════════════════════════════════════════════════════════════
+function setBackBtn(fn) {
+    if (!S.tg?.BackButton) return;
+    S.tg.BackButton.offClick(_backBtnHandler);
+    _backBtnHandler = fn || (()=>{});
+    if (fn) {
+        S.tg.BackButton.onClick(_backBtnHandler);
+        S.tg.BackButton.show();
+    } else {
+        S.tg.BackButton.hide();
+    }
+}
+let _backBtnHandler = ()=>{};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// NAVIGATION
+// ═══════════════════════════════════════════════════════════════════════════
+function goHome() {
+    haptic();
+    showScreen('s-home');
+    setBackBtn(null);
+    hideMainBtn();
+    loadEvents();
+}
+
+function goCreate(template=null) {
+    haptic();
+    showScreen('s-create');
+    setBackBtn(goHome);
+    setMainBtn('Создать событие', submitCreate);
+
+    // Check for draft
+    const draft = getDraft();
+    if (draft && !template) {
+        const resume = confirm('Продолжить создание предыдущего события?');
+        if (resume) { restoreDraft(draft); return; }
+        clearDraft();
+    }
+
+    // Reset form
+    clearCreateForm();
+    if (template) applyTemplateName(template);
+
+    setTimeout(() => $('ev-name').focus(), 300);
+}
+
+function goDetail(event) {
+    haptic();
+    S.currentEvent = event;
+    showScreen('s-detail');
+    renderDetail(event);
+    setBackBtn(goHome);
+    setMainBtn('Список покупок →', goShoppingTab);
+    // Load full detail from API
+    loadDetail(event.id);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// HOME SCREEN
+// ═══════════════════════════════════════════════════════════════════════════
+async function loadEvents() {
+    showHomeSkeleton();
+    try {
+        const data = await api('/events');
+        S.events = data.events || [];
+        renderHome();
+    } catch(e) {
+        console.error('loadEvents:', e);
+        toast('Не удалось загрузить события');
+        renderHome(); // show empty state
+    }
+}
+
+function showHomeSkeleton() {
+    // null-safe: renderHome() rewrites #events-list-wrap and removes
+    // #events-skeleton / #events-list, so on later loads these may not exist.
+    // Touching a missing node here used to throw and abort loadEvents, leaving
+    // the hero skeleton stuck (black block) until the app was reopened.
+    const hs = $('hero-skeleton'); if (hs) hs.style.display = 'block';
+    const hc = $('hero-card');     if (hc) hc.style.display = 'none';
+    const he = $('hero-empty');    if (he) he.style.display = 'none';
+    const es = $('events-skeleton'); if (es) es.style.display = 'block';
+    const el = $('events-list');     if (el) el.innerHTML = '';
+}
+
+function renderHome() {
+    const _es = $('events-skeleton'); if (_es) _es.style.display = 'none';
+
+    const now = Date.now();
+    const upcoming = S.events.filter(e => !e.event_date || new Date(e.event_date) >= now);
+    const past = S.events.filter(e => e.event_date && new Date(e.event_date) < now);
+
+    // Hero card — nearest upcoming
+    const hero = upcoming[0] || null;
+    if (hero) {
+        renderHero(hero);
+    } else {
+        $('hero-skeleton').style.display = 'none';
+        $('hero-card').style.display = 'none';
+        $('hero-empty').innerHTML = '';
+        $('hero-empty').style.display = 'block';
+    }
+
+    // Upcoming list (skip hero)
+    const listEvents = upcoming.slice(hero ? 1 : 0);
+    $('events-section-title').textContent = `Предстоящие (${listEvents.length})`;
+
+    if (S.events.length === 0) {
+        // Full empty state
+        $('events-list-wrap').innerHTML = `
+            <div class="empty-state">
+                <div class="empty-icon">🌿</div>
+                <div class="empty-title">Пока нет событий</div>
+                <div class="empty-sub">Создайте первое застолье — для компании или семьи</div>
+                <div class="template-chips">
+                    <button class="chip" onclick="goCreate('shashlyki')">🔥 Шашлыки</button>
+                    <button class="chip" onclick="goCreate('birthday')">🎂 День рождения</button>
+                    <button class="chip" onclick="goCreate('dinner')">🍽 Ужин</button>
+                </div>
+            </div>
+        `;
+    } else {
+        // Re-wrap with proper list
+        $('events-list-wrap').innerHTML = '<div id="events-list"></div>';
+        if (listEvents.length === 0) {
+            $('events-list').innerHTML = '<div style="padding:14px 16px;color:var(--hint);font-size:14px">Нет других предстоящих событий</div>';
+        } else {
+            $('events-list').innerHTML = listEvents.map(renderEventRow).join('');
+            // Animate progress bars
+            requestAnimationFrame(() => animateProgressBars());
+        }
+    }
+
+    // Past events
+    if (past.length > 0) {
+        $('past-wrap').style.display = 'block';
+        $('past-label').textContent = `Прошедшие (${past.length})`;
+        $('past-list').innerHTML = past.map(renderEventRow).join('');
+    } else {
+        $('past-wrap').style.display = 'none';
+    }
+}
+
+function renderHero(ev) {
+    $('hero-skeleton').style.display = 'none';
+    const card = $('hero-card');
+    card.style.display = 'flex';
+    card.onclick = () => { haptic(); goDetail(ev); };
+
+    $('hero-name').textContent = ev.name;
+    $('hero-meta').textContent = [formatDate(ev.event_date), daysUntil(ev.event_date)].filter(Boolean).join(' · ');
+    $('hero-stats').innerHTML = [
+        ev.guests_count ? `👥 ${ev.guests_count} ${pluralGuests(ev.guests_count)}` : '',
+        ev.recipes_count ? `🍽 ${ev.recipes_count} блюд` : '',
+        ev.shopping_items_count ? `🛒 ${ev.shopping_items_count} покупок` : '',
+    ].filter(Boolean).map(s=>`<span>${s}</span>`).join('');
+
+    const pct = ev.progress_percent || 0;
+    $('hero-progress-label').textContent = `${pct}% готово`;
+    // Animate after render
+    requestAnimationFrame(() => {
+        $('hero-progress').style.width = pct + '%';
+    });
+}
+
+function renderEventRow(ev) {
+    const pct = ev.progress_percent || 0;
+    return `
+    <div class="event-row" onclick="haptic();openEventById(${ev.id})">
+        <div class="event-emoji">${templateEmoji(ev.template)}</div>
+        <div class="event-info">
+            <div class="event-name">${esc(ev.name)}</div>
+            <div class="event-meta-row">${formatDate(ev.event_date)}</div>
+            <div class="card-progress-track" style="margin-top:6px;width:100%">
+                <div class="card-progress-fill" data-pct="${pct}"></div>
+            </div>
+        </div>
+        <div class="event-progress-num">${pct}%</div>
+    </div>`;
+}
+
+function openEventById(id) {
+    const ev = S.events.find(e => e.id === id);
+    if (ev) goDetail(ev);
+}
+
+function openHeroEvent() {
+    const hero = S.events.find(e => !isPast(e.event_date)) || S.events[0];
+    if (hero) goDetail(hero);
+}
+
+function animateProgressBars() {
+    document.querySelectorAll('.card-progress-fill[data-pct]').forEach(el => {
+        el.style.width = el.dataset.pct + '%';
+    });
+}
+
+function togglePast(headerEl) {
+    const list = $('past-list');
+    const arrow = $('past-arrow');
+    const isOpen = list.style.display !== 'none';
+    list.style.display = isOpen ? 'none' : 'block';
+    arrow.textContent = isOpen ? '▶' : '▼';
+}
+
+function openSettings() {
+    haptic();
+    openSheet('Аккаунт', [
+        {icon: '👤', label: S.user ? `${S.user.first_name || ''}${S.user.username ? ' @'+S.user.username : ''}`.trim() : '—', fn: 'closeSheet()'},
+        {icon: '🎁', label: 'Пригласить друзей', fn: 'closeSheet();openReferral()'},
+        {icon: '📤', label: 'Поделиться ПОЛЯНОЙ', fn: 'shareApp(); closeSheet()'},
+        {icon: '📄', label: 'Документы и конфиденциальность', fn: 'closeSheet();openPrivacy()'},
+        {icon: '✕',  label: 'Закрыть', fn: 'closeSheet()'},
+    ]);
+}
+
+// ── Onboarding ───────────────────────────────────────────────────────────────
+
+const OB_SCREENS = [
+    { text: '🌿 <b>Добро пожаловать в ПОЛЯНУ</b><br><br>Это ваша личная библиотека рецептов прямо в Telegram.<br><br>Отправьте боту рецепт — ПОЛЯНА аккуратно сохранит его, чтобы он больше не потерялся.', btns: [{label:'👋 Понятно, дальше', action:'next'}] },
+    { text: '📥 <b>Сохраняйте рецепты откуда угодно</b><br><br>Можно отправить:<br>📷 фото или скриншот<br>🔗 ссылку на сайт<br>📝 обычный текст<br>🎙 голосовое сообщение<br>📩 пересланное сообщение<br><br>Бот распознает рецепт и добавит его в библиотеку.', btns: [{label:'Дальше', action:'next'}] },
+    { text: '📚 <b>Всё хранится в одном месте</b><br><br>В библиотеке можно:<br>— искать рецепты<br>— редактировать<br>— менять количество порций<br>— добавлять в избранное<br>— делиться с друзьями<br>— сохранять рецепты друзей', btns: [{label:'Дальше', action:'next'}] },
+    { text: '🍽 <b>Планируйте ужины и встречи</b><br><br>Из сохранённых рецептов можно собрать меню, пересчитать ингредиенты и получить единый список покупок.<br><br>Для совместных событий можно распределить покупки и посчитать расходы.', btns: [{label:'Дальше', action:'next'}] },
+    { text: '✨ <b>Бесплатные функции и ИИ</b><br><br>Бесплатно:<br>— библиотека<br>— поиск<br>— ручное редактирование<br>— обмен рецептами<br>— события<br>— списки покупок<br>— расчёт расходов<br><br>AI-баллы используются только там, где работает ИИ.', btns: [{label:'Продолжить', action:'next'}] },
+    { text: '', btns: [] }, // legal — filled dynamically
+    { text: 'Всё готово 🌿<br><br>Отправьте сюда первый рецепт или откройте библиотеку.', btns: [{label:'📚 Открыть библиотеку', action:'done_library'}, {label:'📷 Отправить рецепт', action:'done_recipe'}] },
+];
+
+let obStep = 0;
+
+async function startOnboarding() {
+    try {
+        const st = await api('/onboarding/status');
+        if (st.status === 'completed' || st.status === 'skipped') return false;
+        obStep = st.step || 0;
+        showOnboardingStep();
+        return true;
+    } catch {
+        // API failed — do NOT show onboarding, go to home screen
+        return false;
+    }
+}
+
+function showOnboardingStep() {
+    if (obStep >= OB_SCREENS.length) obStep = 0;
+    const scr = OB_SCREENS[obStep];
+    showScreen('s-onboarding');
+    const el = $('ob-step-text');
+    const btnsEl = $('ob-buttons');
+
+    if (obStep === 5) {
+        // Legal screen — dynamic
+        loadLegalScreen(el, btnsEl);
+        return;
+    }
+
+    el.innerHTML = scr.text;
+    let html = '';
+    if (obStep > 0) {
+        html += `<button class="btn btn-sm btn-outline" style="margin-bottom:8px;width:100%" onclick="obBack()">⬅️ Назад</button>`;
+    }
+    for (const b of scr.btns) {
+        html += `<button class="btn btn-green" style="width:100%;margin-bottom:8px" onclick="obAction('${b.action}')">${b.label}</button>`;
+    }
+    if (obStep < 5) {
+        html += `<button class="btn btn-sm btn-outline" style="width:100%" onclick="obSkip()">Пропустить знакомство</button>`;
+    }
+    btnsEl.innerHTML = html;
+    S.tg?.BackButton?.show?.();
+    S.tg?.BackButton?.onClick?.(() => obBack());
+}
+
+async function loadLegalScreen(el, btnsEl) {
+    el.innerHTML = '📋 <b>Документы</b><br><br>Чтобы пользоваться ПОЛЯНОЙ, ознакомьтесь с документами.';
+    try {
+        const status = await api('/legal/status');
+        const termsOk = status.terms?.accepted;
+        const pdnOk = status.personal_data_consent?.accepted;
+        let statusHtml = `<div style="margin:12px 0">`;
+        statusHtml += `<div style="padding:8px 0">${termsOk ? '✅' : '⬜'} Пользовательское соглашение</div>`;
+        statusHtml += `<div style="padding:8px 0">${pdnOk ? '✅' : '⬜'} Обработка персональных данных</div>`;
+        statusHtml += `</div>`;
+        el.innerHTML += statusHtml;
+
+        let html = '';
+        if (!termsOk) html += `<button class="btn btn-sm btn-green" style="width:100%;margin-bottom:8px" onclick="acceptDoc('terms')">✅ Принять соглашение</button>`;
+        if (!pdnOk) html += `<button class="btn btn-sm btn-green" style="width:100%;margin-bottom:8px" onclick="acceptDoc('personal_data_consent')">✅ Дать согласие на данные</button>`;
+        html += `<button class="btn btn-sm btn-outline" style="width:100%;margin-bottom:8px" onclick="openDocuments()">📋 Открыть документы</button>`;
+        if (termsOk && pdnOk) {
+            html += `<button class="btn btn-green" style="width:100%;margin-bottom:8px" onclick="obAction('next')">Продолжить</button>`;
+        }
+        html += `<button class="btn btn-sm btn-outline" style="width:100%" onclick="obBack()">⬅️ Назад</button>`;
+        btnsEl.innerHTML = html;
+    } catch {
+        el.innerHTML = 'Не удалось проверить документы<br><br>Попробуйте загрузить данные ещё раз.<br>Рецепты и ваш аккаунт не пострадали.';
+        btnsEl.innerHTML = `
+            <button class="btn btn-green" style="width:100%;margin-bottom:8px" 
+                    onclick="loadLegalScreen($('ob-step-text'), $('ob-buttons'))">Повторить</button>
+            <button class="btn btn-sm btn-outline" style="width:100%;margin-bottom:8px" 
+                    onclick="openDocuments()">📋 Открыть документы</button>
+            <button class="btn btn-sm btn-outline" style="width:100%" 
+                    onclick="window.open('https://t.me/${BOT}', '_blank')">Поддержка</button>`;
+    }
+}
+
+async function acceptDoc(docType) {
+    try {
+        await api('/legal/accept', 'POST', { document_type: docType, document_version: '1.0' });
+        haptic('success');
+        // Refresh legal screen
+        obStep = 5;
+        showOnboardingStep();
+    } catch (e) {
+        toast('Не удалось принять документ');
+    }
+}
+
+function obAction(action) {
+    haptic();
+    if (action === 'next') {
+        obStep++;
+        api('/onboarding/step', 'POST', { step: obStep }).catch(()=>{});
+        showOnboardingStep();
+    } else if (action === 'done_library') {
+        api('/onboarding/skip', 'POST').catch(()=>{});
+        goHome();
+    } else if (action === 'done_recipe') {
+        api('/onboarding/skip', 'POST').catch(()=>{});
+        goHome();
+        toast('Отправьте рецепт боту в Telegram');
+    }
+}
+
+function obBack() {
+    haptic();
+    if (obStep > 0) {
+        obStep--;
+        showOnboardingStep();
+    } else {
+        goHome();
+    }
+}
+
+async function obSkip() {
+    haptic();
+    try { await api('/onboarding/skip', 'POST'); } catch {}
+    goHome();
+}
+
+// ── Documents ────────────────────────────────────────────────────────────────
+
+const DOC_LABELS = {
+    terms: '📜 Пользовательское соглашение',
+    privacy_policy: '🔒 Политика конфиденциальности',
+    personal_data_consent: '✅ Согласие на обработку данных',
+    ai_processing_consent: '🤖 Использование ИИ',
+    referral_terms: '🎁 Правила бонусной программы',
+};
+
+async function openDocuments() {
+    haptic();
+    showScreen('s-documents');
+    const list = $('docs-list');
+    list.innerHTML = '<div style="color:var(--hint)">Загрузка...</div>';
+    try {
+        const docs = await api('/legal/documents');
+        let status = {};
+        try { status = await api('/legal/status'); } catch {}
+
+        let html = '';
+        for (const d of docs) {
+            const label = DOC_LABELS[d.type] || d.title;
+            const accepted = status[d.type]?.accepted;
+            const statusBadge = d.requires_acceptance ? (accepted ? ' <span style="color:var(--green)">✅</span>' : ' <span style="color:var(--hint)">⬜</span>') : '';
+            html += `<div class="card" style="margin-bottom:8px;cursor:pointer" onclick="openDocViewer('${d.type}')">
+                <div style="font-weight:500">${label}${statusBadge}</div>
+                <div style="font-size:12px;color:var(--hint);margin-top:4px">Версия ${d.version}</div>
+            </div>`;
+        }
+        list.innerHTML = html || '<div style="color:var(--hint)">Документы пока не загружены.</div>';
+    } catch {
+        list.innerHTML = '<div style="color:var(--hint)">Не удалось загрузить документы.</div>';
+    }
+    S.tg?.BackButton?.show?.();
+    S.tg?.BackButton?.onClick?.(() => goHome());
+}
+
+async function openDocViewer(docType) {
+    haptic();
+    showScreen('s-doc-viewer');
+    $('doc-viewer-title').textContent = DOC_LABELS[docType] || docType;
+    $('doc-viewer-content').textContent = 'Загрузка...';
+    $('doc-viewer-actions').innerHTML = '';
+    try {
+        const doc = await api(`/legal/documents/${docType}`);
+        $('doc-viewer-content').textContent = doc.content;
+        let html = '';
+        if (doc.requires_acceptance) {
+            html += `<button class="btn btn-green" style="width:100%;margin-bottom:8px" onclick="acceptDocFromViewer('${docType}')">✅ Принять</button>`;
+        }
+        html += `<button class="btn btn-outline" style="width:100%" onclick="openDocuments()">⬅️ К документам</button>`;
+        $('doc-viewer-actions').innerHTML = html;
+    } catch {
+        $('doc-viewer-content').textContent = 'Не удалось загрузить документ.';
+    }
+    S.tg?.BackButton?.show?.();
+    S.tg?.BackButton?.onClick?.(() => openDocuments());
+}
+
+async function acceptDocFromViewer(docType) {
+    await acceptDoc(docType);
+    openDocuments();
+}
+
+// ── Privacy ──────────────────────────────────────────────────────────────────
+
+async function openPrivacy() {
+    haptic();
+    showScreen('s-privacy');
+    const el = $('privacy-status');
+    el.innerHTML = 'Загрузка...';
+    try {
+        const status = await api('/legal/status');
+        const items = [
+            { key: 'terms', label: 'Пользовательское соглашение' },
+            { key: 'personal_data_consent', label: 'Обработка персональных данных' },
+            { key: 'ai_processing_consent', label: 'Использование ИИ' },
+        ];
+        let html = '';
+        for (const it of items) {
+            const ok = status[it.key]?.accepted;
+            html += `<div style="padding:6px 0">${ok ? '✅' : '⬜'} ${it.label}</div>`;
+        }
+        el.innerHTML = html;
+    } catch {
+        el.innerHTML = 'Не удалось загрузить статус.';
+    }
+    S.tg?.BackButton?.show?.();
+    S.tg?.BackButton?.onClick?.(() => goHome());
+}
+
+async function exportData() {
+    try {
+        const data = await api('/account/export', 'POST');
+        const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
+        const url = URL.createObjectURL(blob);
+        S.tg?.openLink?.(url);
+        toast('Данные подготовлены');
+    } catch {
+        toast('Не удалось экспортировать данные');
+    }
+}
+
+async function requestDelete() {
+    S.tg?.showPopup?.({
+        title: 'Удаление аккаунта',
+        message: 'Вы уверены? Используйте /delete_me в боте для полного удаления.',
+        buttons: [{type: 'ok'}],
+    });
+}
+
+function shareApp() {
+    const link = `https://t.me/${BOT}`;
+    const text = 'Попробуй ПОЛЯНУ — планировщик застолий с друзьями!';
+    S.tg?.openTelegramLink?.(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(text)}`);
+}
+
+async function openReferral() {
+    haptic();
+    showScreen('s-referral');
+    // Track screen open
+    api('/referrals/me').catch(()=>{});  // warm up
+    // Load dashboard
+    let d;
+    try { d = await api('/referrals/me'); }
+    catch { toast('Не удалось загрузить данные'); return; }
+    S.referral = d;
+    // Balance cards
+    const bal = d.balance || {};
+    $('ref-paid').textContent = bal.paid_points || 0;
+    $('ref-bonus').textContent = bal.bonus_points || 0;
+    $('ref-pending').textContent = bal.pending_bonus_points || 0;
+    // Stats
+    const st = d.stats || {};
+    $('ref-invited').textContent = st.invited || 0;
+    $('ref-activated').textContent = st.activated || 0;
+    $('ref-paying').textContent = st.paying || 0;
+    $('ref-total-reward').textContent = `${st.total_reward_points || 0} баллов`;
+    // Link
+    $('ref-link').textContent = d.referral_url || '—';
+    // Load history
+    loadReferralHistory();
+}
+
+async function loadReferralHistory() {
+    let h;
+    try { h = await api('/referrals/history?limit=20'); }
+    catch { return; }
+    const list = $('ref-history');
+    const items = h.history || [];
+    if (!items.length) {
+        list.innerHTML = '<div style="padding:16px;text-align:center;color:var(--hint);font-size:13px">Пока нет начислений</div>';
+        return;
+    }
+    list.innerHTML = items.map(r => {
+        const sign = r.reward_points > 0 ? '+' : '';
+        const cls = r.status === 'cancelled' || r.status === 'reversed' ? 'negative' : 'positive';
+        const statusLabels = {pending:'ожидает',available:'начислено',cancelled:'отменено',reversed:'возврат'};
+        const statusCls = r.status;
+        return `
+        <div class="ref-history-item">
+            <div class="ref-history-amount ${cls}">${sign}${r.reward_points} баллов</div>
+            <div class="ref-history-desc">Пополнение приглашённого друга · ${esc(r.referred_name || '')}</div>
+            <div class="ref-history-status ${statusCls}">${statusLabels[r.status] || r.status}</div>
+        </div>`;
+    }).join('');
+}
+
+async function shareReferralLink() {
+    const link = S.referral?.referral_url;
+
+    if (!link) {
+        toast('Ссылка пока недоступна');
+        return;
+    }
+
+    haptic();
+
+    const fallbackText =
+        '🌿 ПОЛЯНА — рецепты и застолья в одном месте.\n\n' +
+        'Сохраняйте рецепты из ссылок, фото, текста ' +
+        'и голосовых сообщений, собирайте меню и ' +
+        'общий список покупок.';
+
+    const canUsePreparedMessage =
+        typeof S.tg?.shareMessage === 'function' &&
+        (
+            typeof S.tg?.isVersionAtLeast !== 'function' ||
+            S.tg.isVersionAtLeast('8.0')
+        );
+
+    if (canUsePreparedMessage) {
+        try {
+            const prepared = await api(
+                '/referrals/prepare-share',
+                'POST'
+            );
+
+            const preparedId =
+                prepared?.prepared_message_id;
+
+            if (!preparedId) {
+                throw new Error(
+                    'prepared_message_id is missing'
+                );
+            }
+
+            S.tg.shareMessage(
+                preparedId,
+                sent => {
+                    if (sent) {
+                        toast(
+                            'Приглашение отправлено'
+                        );
+                    }
+                }
+            );
+
+            return;
+        } catch (error) {
+            console.error(
+                'Referral prepared share failed',
+                error
+            );
+        }
+    }
+
+    // Fallback for old Telegram clients.
+    if (S.tg?.openTelegramLink) {
+        S.tg.openTelegramLink(
+            'https://t.me/share/url' +
+            `?url=${encodeURIComponent(link)}` +
+            `&text=${encodeURIComponent(fallbackText)}`
+        );
+    } else {
+        shareReferral(link);
+    }
+}
+
+
+function copyReferralLink() {
+    const link = S.referral?.referral_url;
+    if (!link) { toast('Ссылка пока недоступна'); return; }
+    navigator.clipboard?.writeText(link).then(() => toast('Ссылка скопирована')).catch(() => {});
+}
+
+function showRefRules() {
+    if (S.tg?.showPopup) {
+        S.tg.showPopup({
+            title: 'Правила программы',
+            message: '1. Бонус — 10% от пополнений друзей\n2. Бонус начисляется баллами\n3. Баллы нельзя вывести\n4. Баллы тратятся на ИИ-функции\n5. Начисление через 7 дней\n6. При возврате — отмена\n7. Саморефералы запрещены',
+            buttons: [{ type: 'ok' }],
+        });
+    } else {
+        toast('Правила: бонус 10%, баллы внутри ПОЛЯНЫ, без вывода');
+    }
+}
+
+function pluralGuests(n) {
+    if (n === 1) return 'гость';
+    if (n >= 2 && n <= 4) return 'гостя';
+    return 'гостей';
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PULL TO REFRESH
+// ═══════════════════════════════════════════════════════════════════════════
+(function setupPTR() {
+    let startY = 0, isPulling = false;
+    const page = () => $('home-page');
+
+    document.addEventListener('touchstart', e => {
+        if (document.getElementById('s-home').classList.contains('active') && window.scrollY === 0) {
+            startY = e.touches[0].clientY;
+            isPulling = true;
+        }
+    }, {passive: true});
+
+    document.addEventListener('touchmove', e => {
+        if (!isPulling) return;
+        const dy = e.touches[0].clientY - startY;
+        if (dy > 60) {
+            const ind = $('ptr-indicator');
+            ind.classList.add('visible');
+        }
+    }, {passive: true});
+
+    document.addEventListener('touchend', e => {
+        if (!isPulling) return;
+        isPulling = false;
+        const dy = (e.changedTouches[0]?.clientY || startY) - startY;
+        const ind = $('ptr-indicator');
+        ind.classList.remove('visible');
+        if (dy > 60) {
+            haptic('light');
+            loadEvents();
+        }
+    }, {passive: true});
+})();
+
+// ═══════════════════════════════════════════════════════════════════════════
+// CREATE SCREEN
+// ═══════════════════════════════════════════════════════════════════════════
+const TEMPLATES = {
+    shashlyki: { name: 'Шашлыки', time: '14:00', desc: 'Классические шашлыки на природе', dayOffset: 6 },
+    birthday:  { name: 'День рождения', time: '18:00', desc: 'День рождения с тортом и закусками' },
+    newyear:   { name: 'Новый год', date: '12-31', time: '22:00', desc: 'Новогодний стол с оливье' },
+};
+
+function applyTemplate(btn) {
+    haptic();
+    document.querySelectorAll('.tpl-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    const tpl = btn.dataset.tpl;
+    if (tpl && TEMPLATES[tpl]) applyTemplateName(tpl);
+    saveDraft();
+}
+
+function applyTemplateName(tpl) {
+    const t = TEMPLATES[tpl];
+    if (!t) return;
+    // Stagger animation on fields
+    const fields = [$('ev-name'), $('ev-date'), $('ev-time'), $('ev-location')];
+    fields.forEach((f, i) => {
+        if (!f) return;
+        setTimeout(() => {
+            f.style.transition = 'background .25s';
+            f.style.background = 'rgba(45,122,62,.08)';
+            setTimeout(() => { f.style.background = ''; f.style.transition = ''; }, 400);
+        }, i * 50);
+    });
+    $('ev-name').value = t.name;
+    if (t.time) $('ev-time').value = t.time;
+    if (t.date) {
+        const y = new Date().getFullYear();
+        $('ev-date').value = `${y}-${t.date}`;
+    } else if (t.dayOffset !== undefined) {
+        const d = new Date(Date.now() + t.dayOffset * 86400000);
+        // Find next Saturday
+        const sat = new Date(d);
+        sat.setDate(sat.getDate() + ((6 - sat.getDay() + 7) % 7));
+        $('ev-date').value = sat.toISOString().split('T')[0];
+    }
+    if (t.desc) $('ev-desc').value = t.desc;
+}
+
+function setQuickDate(type, btn) {
+    haptic();
+    document.querySelectorAll('.quick-chip').forEach(c => c.classList.remove('active'));
+    btn.classList.add('active');
+    const now = new Date();
+    let d = new Date(now);
+    if (type === 'today') {
+        // nothing
+    } else if (type === 'tomorrow') {
+        d.setDate(d.getDate() + 1);
+    } else if (type === 'weekend') {
+        const day = d.getDay();
+        d.setDate(d.getDate() + ((6 - day + 7) % 7 || 7));
+    }
+    $('ev-date').value = d.toISOString().split('T')[0];
+}
+
+function clearQuickDate() {
+    document.querySelectorAll('.quick-chip').forEach(c => c.classList.remove('active'));
+}
+
+function toggleExtra(toggleEl) {
+    const body = $('extra-body');
+    const isOpen = body.classList.contains('open');
+    body.classList.toggle('open', !isOpen);
+    toggleEl.querySelector('span').textContent = (isOpen ? '▶' : '▼') + ' Описание и доп. опции';
+}
+
+function validateName() {
+    const v = $('ev-name').value.trim();
+    if (!v) {
+        $('ev-name').classList.add('error');
+        $('ev-name-err').textContent = 'Введите название события';
+        $('ev-name-err').style.display = 'block';
+        return false;
+    }
+    $('ev-name').classList.remove('error');
+    $('ev-name-err').style.display = 'none';
+    return true;
+}
+
+function validateDate() {
+    const d = $('ev-date').value;
+    if (d) {
+        const chosen = new Date(d);
+        const today = new Date(); today.setHours(0,0,0,0);
+        if (chosen < today) {
+            $('ev-date').classList.add('error');
+            $('ev-date-err').textContent = 'Нельзя выбрать дату в прошлом';
+            $('ev-date-err').style.display = 'block';
+            toast('Выберите дату в будущем');
+            return false;
+        }
+    }
+    $('ev-date').classList.remove('error');
+    $('ev-date-err').style.display = 'none';
+    return true;
+}
+
+async function submitCreate() {
+    if (!validateName()) { hapticNotif('error'); return; }
+    if (!validateDate()) { hapticNotif('error'); return; }
+
+    const name = $('ev-name').value.trim();
+    const dateVal = $('ev-date').value;
+    const timeVal = $('ev-time').value || '18:00';
+    // Build a timezone-correct instant: interpret the entered date/time as LOCAL,
+    // send as ISO (UTC). Avoids the +offset shift (e.g. 18:00 showing as 21:00).
+    let event_date = null;
+    if (dateVal) {
+        const dt = new Date(`${dateVal}T${timeVal}`);
+        event_date = isNaN(dt) ? `${dateVal}T${timeVal}:00` : dt.toISOString();
+    }
+    const location = $('ev-location').value.trim() || null;
+    const description = $('ev-desc').value.trim() || null;
+    const activeTpl = document.querySelector('.tpl-btn.active')?.dataset.tpl || null;
+
+    if (S.tg?.MainButton) {
+        S.tg.MainButton.showProgress(false);
+        S.tg.MainButton.disable();
+    }
+
+    try {
+        const data = await api('/events', 'POST', {
+            name, event_date, location, description,
+            template: activeTpl,
+            owner_first_name: S.user?.first_name || '',
+            owner_username: S.user?.username || '',
+        });
+
+        hapticNotif('success');
+        clearDraft();
+
+        // Confetti 🎉
+        if (typeof confetti === 'function') {
+            confetti({ particleCount: 100, spread: 80, origin: {y: .6}, colors: ['#2d7a3e','#4a9c5e','#fff','#ffd700'] });
+            setTimeout(() => confetti({ particleCount: 60, spread: 120, origin: {y: .5} }), 400);
+        }
+
+        // Go to home, reload events
+        goHome();
+        toast('🎉 Событие создано!');
+
+    } catch(e) {
+        hapticNotif('error');
+        console.error('createEvent:', e);
+        toast(e.status === 401 ? 'Ошибка авторизации' : 'Не удалось создать событие');
+    } finally {
+        if (S.tg?.MainButton) {
+            S.tg.MainButton.hideProgress();
+            S.tg.MainButton.enable();
+        }
+    }
+}
+
+function clearCreateForm() {
+    ['ev-name','ev-date','ev-time','ev-location','ev-desc'].forEach(id => { $(id).value = ''; });
+    ['ev-name-err','ev-date-err'].forEach(id => { $(id).style.display='none'; });
+    ['ev-name','ev-date'].forEach(id => { $(id).classList.remove('error'); });
+    document.querySelectorAll('.tpl-btn').forEach(b => b.classList.toggle('active', b.dataset.tpl===''));
+    document.querySelectorAll('.quick-chip').forEach(c => c.classList.remove('active'));
+    $('extra-body').classList.remove('open');
+}
+
+// Draft save/restore
+function saveDraft() {
+    try {
+        localStorage.setItem('polyana_draft', JSON.stringify({
+            name: $('ev-name').value,
+            date: $('ev-date').value,
+            time: $('ev-time').value,
+            location: $('ev-location').value,
+            desc: $('ev-desc').value,
+            tpl: document.querySelector('.tpl-btn.active')?.dataset.tpl || '',
+        }));
+    } catch {}
+}
+function getDraft() {
+    try {
+        const d = localStorage.getItem('polyana_draft');
+        return d ? JSON.parse(d) : null;
+    } catch { return null; }
+}
+function clearDraft() {
+    try { localStorage.removeItem('polyana_draft'); } catch {}
+}
+function restoreDraft(d) {
+    if (d.name) $('ev-name').value = d.name;
+    if (d.date) $('ev-date').value = d.date;
+    if (d.time) $('ev-time').value = d.time;
+    if (d.location) $('ev-location').value = d.location;
+    if (d.desc) $('ev-desc').value = d.desc;
+    if (d.tpl !== undefined) {
+        document.querySelectorAll('.tpl-btn').forEach(b => b.classList.toggle('active', b.dataset.tpl===d.tpl));
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// DETAIL SCREEN
+// ═══════════════════════════════════════════════════════════════════════════
+function renderDetail(ev) {
+    $('detail-title').textContent = ev.name;
+
+    // Progress
+    const pct = ev.progress_percent || 0;
+    $('detail-progress-pct').textContent = pct + '%';
+    requestAnimationFrame(() => {
+        $('detail-progress-fill').style.width = pct + '%';
+    });
+
+    // Info bar
+    const parts = [];
+    if (ev.event_date) parts.push(`📅 ${formatDate(ev.event_date)}`);
+    if (ev.location)   parts.push(`📍 ${esc(ev.location)}`);
+    $('detail-info-bar').innerHTML = parts.map(p=>`<span class="info-pill">${p}</span>`).join('');
+
+    // Collabs
+    renderCollabs(ev.collaborators || []);
+
+    // Next step
+    if (ev.next_step) {
+        $('next-step-text').textContent = ev.next_step.text;
+        $('next-step-block').style.display = 'flex';
+    } else {
+        $('next-step-block').style.display = 'none';
+    }
+
+    // Recipes
+    renderRecipes(ev.recipes || []);
+    // Guests
+    renderGuests(ev.collaborators || []);
+
+    // Reset tab
+    switchTabByName('menu');
+}
+
+async function loadDetail(id) {
+    try {
+        const ev = await api(`/events/${id}`);
+        S.currentEvent = ev;
+        renderDetail(ev);
+    } catch(e) {
+        console.error('loadDetail:', e);
+        if (e.status !== 403 && e.status !== 404) toast('Ошибка загрузки события');
+    }
+}
+
+function renderCollabs(collabs) {
+    const stack = $('avatar-stack');
+    const visible = collabs.slice(0, 5);
+    const extra = collabs.length - 5;
+    stack.innerHTML = visible.map(c => {
+        const bg = authorColor(c.user_id);
+        return `<div class="avatar" style="background:${bg}" title="${esc(c.first_name)}">${initials(c.first_name)}</div>`;
+    }).join('') + (extra > 0 ? `<div class="avatar avatar-more">+${extra}</div>` : '');
+}
+
+function renderRecipes(recipes) {
+    if (recipes.length === 0) {
+        $('recipes-list').innerHTML = `
+            <div style="padding:24px 16px;text-align:center;color:var(--hint);font-size:14px">
+                <div style="font-size:32px;margin-bottom:8px">🍽</div>
+                Меню пока пустое — добавьте первое блюдо
+            </div>`;
+        return;
+    }
+    $('recipes-list').innerHTML = recipes.map(r => {
+        const color = authorColor(r.added_by?.user_id);
+        const by = r.added_by?.first_name || 'Гость';
+        const ago = r.added_at ? timeAgo(r.added_at) : '';
+        const ingBadge = r.ingredients_count > 0
+            ? `<span class="recipe-badge">🥄 ${r.ingredients_count}</span>` : '';
+        const timeBadge = r.cook_time_min
+            ? `<span class="recipe-badge">⏱ ${r.cook_time_min} мин.</span>` : '';
+        return `
+        <div class="recipe-card" oncontextmenu="return false" data-id="${r.id}"
+             ontouchstart="startLongPress(${r.id},this)" ontouchend="endLongPress()" ontouchcancel="endLongPress()"
+             onclick="viewRecipeSheet(${r.id})">
+            <div class="recipe-stripe" style="background:${color}"></div>
+            <div class="recipe-emoji">${r.emoji||'🍽'}</div>
+            <div class="recipe-info">
+                <div class="recipe-name">${esc(r.name)}</div>
+                <div class="recipe-meta">
+                    ${esc(by)}${ago?' · '+ago:''}${r.servings?' · '+r.servings+' порц.':''}
+                    ${ingBadge}${timeBadge}
+                </div>
+            </div>
+        </div>`;
+    }).join('');
+}
+
+function renderGuests(collabs) {
+    if (collabs.length === 0) {
+        $('guests-list').innerHTML = `<div style="padding:24px;text-align:center;color:var(--hint);font-size:14px">Пока нет участников</div>`;
+        return;
+    }
+    $('guests-list').innerHTML = collabs.map(c => {
+        const bg = authorColor(c.user_id);
+        const roleLabel = c.role === 'owner' ? 'Организатор' : 'Гость';
+        return `
+        <div class="guest-row">
+            <div class="guest-avatar" style="background:${bg}">${initials(c.first_name)}</div>
+            <div>
+                <div class="guest-name">${esc(c.first_name)}${c.username?' (@'+esc(c.username)+')':''}</div>
+                <div class="guest-role">${roleLabel}</div>
+            </div>
+            ${c.recipes_count ? `<div class="guest-badge">🍽 ${c.recipes_count}</div>` : ''}
+        </div>`;
+    }).join('');
+}
+
+function switchTab(name, btn) {
+    haptic('light');
+    switchTabByName(name);
+    document.querySelectorAll('.tabs .tab').forEach(t => t.classList.remove('active'));
+    btn.classList.add('active');
+    if (name === 'shopping' && S.currentEvent) loadShopping(S.currentEvent.id);
+}
+
+function goShoppingTab() {
+    if (!S.currentEvent) return;
+    haptic();
+    switchTabByName('shopping');
+    document.querySelectorAll('.tabs .tab').forEach(t => t.classList.remove('active'));
+    const btn = document.querySelector('.tabs .tab[onclick*="shopping"]');
+    if (btn) btn.classList.add('active');
+    loadShopping(S.currentEvent.id);
+}
+
+function switchTabByName(name) {
+    S.currentTab = name;
+    const map = {menu:'tab-menu', guests:'tab-guests', shopping:'tab-shopping'};
+    document.querySelectorAll('.tab-content').forEach(tc => tc.classList.remove('active'));
+    if (map[name]) $(map[name]).classList.add('active');
+}
+
+function openEventMenu() {
+    haptic();
+    const ev = S.currentEvent;
+    if (!ev) return;
+    const items = [
+        {icon:'🎨', label:'Сделать приглашение', fn:'closeSheet();openInviteScreen()'},
+        {icon:'✏️', label:'Редактировать', fn:"closeSheet();toast('Редактирование — скоро')"},
+        {icon:'🔗', label:'Пригласить гостей (ссылка)', fn:'closeSheet();inviteCollab()'},
+    ];
+    if (ev.is_owner !== false) {
+        items.push({icon:'🗑', label:'Удалить событие', fn:'closeSheet();confirmDeleteEvent()', destructive:true});
+    }
+    openSheet(ev.name, items);
+}
+
+function nextStepAction() {
+    const action = S.currentEvent?.next_step?.action;
+    if (action === 'add_recipe') openAddRecipe();
+    else if (action === 'invite') inviteCollab();
+}
+
+async function inviteCollab() {
+    haptic();
+    const ev = S.currentEvent;
+    if (!ev) return;
+    try {
+        const data = await api(`/events/${ev.id}/share-link`);
+        const link = data.share_link;
+        if (S.tg?.openTelegramLink) {
+            const text = `Привет! Присоединяйся к «${ev.name}» в ПОЛЯНЕ:`;
+            S.tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(text)}`);
+        } else {
+            await navigator.clipboard.writeText(link).catch(()=>{});
+            toast('Ссылка скопирована');
+        }
+    } catch {
+        toast('Не удалось получить ссылку');
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// INVITATION GENERATOR
+// ═══════════════════════════════════════════════════════════════════════════
+const INV = { mode: 'free', theme: '', image: null, loading: false, themes: [], balance: 0 };
+
+async function openInviteScreen() {
+    const ev = S.currentEvent;
+    if (!ev) return;
+    haptic();
+    showScreen('s-invite');
+    setBackBtn(closeInvite);
+    hideMainBtn();
+    INV.mode = 'free'; INV.theme = ''; INV.image = null;
+    $('inv-img').style.display = 'none';
+    $('inv-preview-empty').textContent = 'Выберите оформление и нажмите «Создать»';
+    $('inv-preview-empty').style.display = '';
+    $('inv-after').style.display = 'none';
+    $('inv-gen-btn').textContent = 'Создать приглашение';
+    if (!INV.themes.length) {
+        try { INV.themes = await api('/invite/themes'); } catch { INV.themes = []; }
+    }
+    renderInviteThemes();
+    refreshBalance();
+}
+
+async function refreshBalance() {
+    try {
+        const d = await api('/balance');
+        INV.balance = d.balance || 0;
+        $('inv-balance-val').textContent = (d.balance_rub ?? 0) + ' ₽';
+        // Show referral offer when balance is low
+        if (INV.balance === 0) {
+            showReferralHook();
+        }
+    } catch {
+        $('inv-balance-val').textContent = '—';
+    }
+}
+
+let _referralHookCooldown = 0;
+function showReferralHook() {
+    // Cooldown: don't show more than once per 7 days (except on explicit zero-balance screen)
+    const now = Date.now();
+    if (now - _referralHookCooldown < 7 * 24 * 60 * 60 * 1000) return;
+    _referralHookCooldown = now;
+    // Show as a toast-like hint
+    setTimeout(() => {
+        toast('🎁 Получите AI-баллы бесплатно — приглашайте друзей!');
+    }, 1000);
+}
+
+function openTopup() {
+    haptic();
+    openSheet('Пополнить баланс', [
+        { icon: '💳', label: 'Банковской картой', fn: "closeSheet();openTopupAmount('card')" },
+        { icon: '⭐', label: 'Telegram Stars', fn: "closeSheet();openTopupAmount('stars')" },
+    ]);
+}
+
+function openTopupAmount(method) {
+    openSheet(method === 'stars' ? 'Stars — выбери сумму' : 'Картой — выбери сумму',
+        [100, 200, 500, 1000].map(a => (
+            { icon: '💰', label: a + ' ₽', fn: `closeSheet();topUp(${a},'${method}')` }
+        )));
+}
+
+function isValidEmail(e) {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(e || '').trim());
+}
+function getStoredEmail() {
+    try { return localStorage.getItem('polyana_email') || ''; } catch { return ''; }
+}
+
+let _pendingTopupAmount = 0;
+
+async function topUp(amount, method = 'card') {
+    haptic();
+    if (method === 'stars') {
+        try {
+            const d = await api('/balance/topup-stars', 'POST', { amount });
+            if (d.invoice_link && S.tg?.openInvoice) {
+                S.tg.openInvoice(d.invoice_link, (status) => {
+                    if (status === 'paid') { toast('Оплачено! Баланс пополнен'); hapticNotif('success'); refreshBalance(); }
+                    else if (status === 'failed') { toast('Оплата не прошла'); }
+                });
+            } else {
+                toast('Stars недоступны в этой версии Telegram');
+            }
+        } catch (e) {
+            toast('Не удалось создать счёт: ' + (e?.message || ''));
+            hapticNotif('error');
+        }
+        return;
+    }
+    // Card: a fiscal receipt (54-ФЗ) requires the buyer's email — make it mandatory.
+    const email = getStoredEmail();
+    if (!isValidEmail(email)) { openEmailSheet(amount); return; }
+    await doCardTopup(amount, email);
+}
+
+async function doCardTopup(amount, email) {
+    try {
+        const d = await api('/balance/topup', 'POST', { amount, email });
+        if (d.confirmation_url) {
+            toast('Открываю оплату ЮКассы…');
+            if (S.tg?.openLink) S.tg.openLink(d.confirmation_url);
+            else window.open(d.confirmation_url, '_blank');
+        }
+    } catch (e) {
+        toast('Не удалось создать платёж: ' + (e?.message || ''));
+        hapticNotif('error');
+    }
+}
+
+function openEmailSheet(amount) {
+    _pendingTopupAmount = amount;
+    $('topup-email').value = getStoredEmail();
+    onEmailInput();
+    $('overlay').classList.add('show');
+    $('email-sheet').classList.add('show');
+    setTimeout(() => $('topup-email').focus(), 150);
+}
+
+function onEmailInput() {
+    const v = $('topup-email').value.trim();
+    $('topup-email-btn').disabled = !isValidEmail(v);
+    $('topup-email-err').style.display = (v && !isValidEmail(v)) ? 'block' : 'none';
+}
+
+async function submitEmailTopup() {
+    const email = $('topup-email').value.trim();
+    if (!isValidEmail(email)) { onEmailInput(); return; }
+    try { localStorage.setItem('polyana_email', email); } catch {}
+    closeSheet();
+    await doCardTopup(_pendingTopupAmount, email);
+}
+
+function closeInvite() {
+    setBackBtn(null);
+    showScreen('s-detail');
+}
+
+function setInviteMode(mode) {
+    haptic('light');
+    INV.mode = mode;
+    $('inv-mode-free').classList.toggle('active', mode === 'free');
+    $('inv-mode-ai').classList.toggle('active', mode === 'ai');
+    $('inv-balance').style.display = mode === 'ai' ? 'flex' : 'none';
+    if (mode === 'ai') refreshBalance();
+}
+
+function renderInviteThemes() {
+    const chips = [{ key: '', title: 'Авто' }].concat(INV.themes || []);
+    $('inv-themes').innerHTML = chips.map(t =>
+        `<button class="cat-chip${INV.theme === t.key ? ' active' : ''}" data-th="${esc(t.key)}" onclick="pickInviteTheme('${esc(t.key)}')">${esc(t.title)}</button>`
+    ).join('');
+}
+
+function pickInviteTheme(k) {
+    haptic('light');
+    INV.theme = k;
+    document.querySelectorAll('#inv-themes .cat-chip').forEach(c =>
+        c.classList.toggle('active', c.dataset.th === k));
+}
+
+async function genInvite() {
+    const ev = S.currentEvent;
+    if (!ev || INV.loading) return;
+    haptic();
+    INV.loading = true;
+    const btn = $('inv-gen-btn');
+    btn.disabled = true;
+    $('inv-img').style.display = 'none';
+    $('inv-after').style.display = 'none';
+    $('inv-preview-empty').textContent = 'Рендерим приглашение…';
+    $('inv-preview-empty').style.display = '';
+    try {
+        const data = await api(`/events/${ev.id}/invite`, 'POST',
+            { theme: INV.theme || null }, 60000);
+        INV.image = data.image;
+        $('inv-img').src = data.image;
+        $('inv-img').style.display = '';
+        $('inv-preview-empty').style.display = 'none';
+        $('inv-after').style.display = 'flex';
+        $('inv-gen-btn').textContent = 'Создать заново';
+        hapticNotif('success');
+    } catch (e) {
+        $('inv-preview-empty').textContent = 'Не удалось создать: ' + (e?.message || 'ошибка');
+        $('inv-preview-empty').style.display = '';
+        hapticNotif('error');
+    } finally {
+        INV.loading = false;
+        btn.disabled = false;
+    }
+}
+
+async function sendInviteToChat() {
+    const ev = S.currentEvent;
+    if (!ev || !INV.image) return;
+    haptic();
+    try {
+        await api(`/events/${ev.id}/invite/send`, 'POST', { image: INV.image });
+        toast('Отправлено вам в чат с ботом — перешлите гостям');
+        hapticNotif('success');
+    } catch (e) {
+        toast('Не удалось отправить: ' + (e?.message || ''));
+        hapticNotif('error');
+    }
+}
+
+async function submitRecipe() {
+    const name = $('recipe-name-input').value.trim();
+    if (!name) { toast('Введите название блюда'); hapticNotif('error'); return; }
+    const emoji = document.querySelector('.emoji-option.selected')?.dataset.emoji || '🍽';
+    const servings = parseInt($('recipe-servings').value) || 4;
+
+    try {
+        await api(`/events/${S.currentEvent.id}/recipes`, 'POST', {
+            name, emoji, servings,
+            added_by_name: S.user?.first_name || 'Гость',
+        });
+        closeSheet();
+        hapticNotif('success');
+        toast('Блюдо добавлено!');
+        loadDetail(S.currentEvent.id);
+    } catch(e) {
+        toast('Не удалось добавить блюдо');
+    }
+}
+
+// Long press for recipe context menu
+let _lpTimer = null;
+function startLongPress(recipeId, el) {
+    _lpTimer = setTimeout(() => {
+        haptic('heavy');
+        el.style.background = 'var(--bg2)';
+        openSheet('Блюдо', [
+            {icon:'🗑', label:'Удалить блюдо', fn:`closeSheet();deleteRecipe(${recipeId})`, destructive:true},
+        ]);
+    }, 600);
+}
+function endLongPress() {
+    clearTimeout(_lpTimer);
+}
+
+async function deleteRecipe(id) {
+    // Optimistic: remove from UI
+    const recipes = S.currentEvent?.recipes || [];
+    const removed = recipes.find(r => r.id === id);
+    S.currentEvent.recipes = recipes.filter(r => r.id !== id);
+    renderRecipes(S.currentEvent.recipes);
+
+    S.pendingDeleteRecipe = { id, removed };
+
+    toast('Блюдо удалено', async () => {
+        // Undo: restore locally (server already deleted if not undone in time)
+        if (S.currentEvent && removed) {
+            S.currentEvent.recipes = [...(S.currentEvent.recipes || []), removed].sort((a,b)=>a.id-b.id);
+            renderRecipes(S.currentEvent.recipes);
+        }
+    }, 5000);
+
+    // Actually delete after a tick
+    try {
+        await api(`/events/${S.currentEvent?.id}/recipes/${id}`, 'DELETE');
+    } catch {
+        // Already toasted
+    }
+}
+
+async function confirmDeleteEvent() {
+    if (!S.tg?.showPopup) {
+        if (!confirm('Удалить событие? Это действие необратимо.')) return;
+        doDeleteEvent();
+        return;
+    }
+    S.tg.showPopup({
+        title: 'Удалить событие?',
+        message: 'Это действие необратимо. Все данные события будут удалены.',
+        buttons: [
+            {id:'del', type:'destructive', text:'Удалить'},
+            {id:'cancel', type:'cancel'},
+        ]
+    }, (btnId) => {
+        if (btnId === 'del') doDeleteEvent();
+    });
+}
+
+async function doDeleteEvent() {
+    try {
+        await api(`/events/${S.currentEvent.id}`, 'DELETE');
+        hapticNotif('success');
+        goHome();
+        toast('Событие удалено');
+    } catch {
+        toast('Не удалось удалить событие');
+    }
+}
+
+function viewRecipeSheet(recipeId) {
+    openRecipeDetail(recipeId, 'event');
+}
+
+function timeAgo(iso) {
+    const diff = Date.now() - new Date(iso).getTime();
+    const m = Math.floor(diff / 60000);
+    if (m < 1) return 'только что';
+    if (m < 60) return `${m} мин. назад`;
+    const h = Math.floor(m / 60);
+    if (h < 24) return `${h} ч. назад`;
+    return `${Math.floor(h/24)} дн. назад`;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// RECIPE FORM SCREEN
+// ═══════════════════════════════════════════════════════════════════════════
+
+const RF = { servings: 4, ingredients: [], steps: [], eventId: null };
+
+const RECIPE_EMOJIS = ['🥩','🍗','🐟','🥗','🍝','🍰','🥘','🍲','🥞','🍖','🥦','🫕','🌮','🥙','🍛','🫔'];
+
+function openRecipeScreen(eventId) {
+    haptic();
+    RF.editId = null;
+    RF.eventId = eventId;
+    RF.servings = 4;
+    RF.ingredients = [];
+    RF.steps = [];
+
+    $('recipe-name-full').value = '';
+    $('recipe-cook-time').value = '';
+    $('recipe-name-full').classList.remove('error');
+    $('recipe-screen-title').textContent = 'Новый рецепт';
+    $('servings-display').textContent = RF.servings;
+
+    // Reset emoji picker
+    $('recipe-emoji-picker').innerHTML = RECIPE_EMOJIS.map((em, i) =>
+        `<button class="emoji-option${i===0?' selected':''}" data-emoji="${em}"
+                 onclick="selectRecipeEmoji(this)">${em}</button>`
+    ).join('');
+
+    // Reset ingredients / steps
+    renderIngredients();
+    renderSteps();
+    $('steps-body').classList.remove('open');
+    const stTgl = document.querySelector('#s-recipe .collapsible-toggle span');
+    if (stTgl) stTgl.textContent = '▶ Шаги приготовления';
+
+    showScreen('s-recipe');
+    setBackBtn(cancelRecipe);
+    setMainBtn('💾 Сохранить рецепт', submitFullRecipe);
+}
+
+// Open the recipe form pre-filled to EDIT the currently-viewed recipe (RDETAIL.recipe)
+function openRecipeEdit() {
+    const r = RDETAIL.recipe;
+    if (!r) return;
+    haptic();
+    RF.editId = r.id;
+    RF.editFrom = RDETAIL.from;
+    RF.eventId = null;
+    RF.servings = r.servings || 4;
+    RF.ingredients = (r.ingredients || []).map(i => ({
+        name: i.name || '', qty: (i.qty ?? '') === null ? '' : (i.qty ?? ''), unit: i.unit || ''
+    }));
+    RF.steps = (r.steps || []).map(s => ({ text: s.text || '' }));
+
+    $('recipe-name-full').value = r.name || '';
+    $('recipe-cook-time').value = r.cook_time_minutes || r.cook_time_min || '';
+    $('recipe-name-full').classList.remove('error');
+    $('recipe-screen-title').textContent = 'Редактировать рецепт';
+    $('servings-display').textContent = RF.servings;
+
+    // Emoji picker — pre-select the recipe's emoji (add it if not in the default set)
+    const cur = r.emoji || '🍽';
+    const list = RECIPE_EMOJIS.includes(cur) ? RECIPE_EMOJIS : [cur, ...RECIPE_EMOJIS];
+    $('recipe-emoji-picker').innerHTML = list.map(em =>
+        `<button class="emoji-option${em===cur?' selected':''}" data-emoji="${em}"
+                 onclick="selectRecipeEmoji(this)">${em}</button>`
+    ).join('');
+
+    renderIngredients();
+    renderSteps();
+    // Expand steps if there are any
+    const hasSteps = RF.steps.length > 0;
+    $('steps-body').classList.toggle('open', hasSteps);
+    const stTgl = document.querySelector('#s-recipe .collapsible-toggle span');
+    if (stTgl) stTgl.textContent = (hasSteps ? '▼' : '▶') + ' Шаги приготовления';
+
+    showScreen('s-recipe');
+    setBackBtn(() => { haptic(); showScreen('s-rdetail'); setBackBtn(() => { haptic(); closeRdetail(); }); });
+    setMainBtn('💾 Сохранить изменения', submitFullRecipe);
+
+    setTimeout(() => $('recipe-name-full').focus(), 350);
+}
+
+function cancelRecipe() {
+    haptic();
+    if (S.currentEvent) {
+        showScreen('s-detail');
+        setBackBtn(goHome);
+        setMainBtn('Список покупок →', goShoppingTab);
+    } else {
+        goHome();
+    }
+}
+
+function selectRecipeEmoji(el) {
+    document.querySelectorAll('#recipe-emoji-picker .emoji-option').forEach(e => e.classList.remove('selected'));
+    el.classList.add('selected');
+    haptic('light');
+}
+
+function stepServings(delta) {
+    haptic('light');
+    RF.servings = Math.max(1, Math.min(200, RF.servings + delta));
+    $('servings-display').textContent = RF.servings;
+}
+
+// ── Ingredients ───────────────────────────────────────────────────────────────
+
+function addIngredientRow() {
+    haptic('light');
+    RF.ingredients.push({name:'', qty:'', unit:''});
+    renderIngredients();
+    // Focus last name field
+    const inputs = document.querySelectorAll('#ingredients-list .ing-name');
+    if (inputs.length) setTimeout(() => inputs[inputs.length-1].focus(), 80);
+}
+
+function removeIngredientRow(idx) {
+    haptic('light');
+    RF.ingredients.splice(idx, 1);
+    renderIngredients();
+}
+
+function renderIngredients() {
+    const list = $('ingredients-list');
+    if (!list) return;
+    if (RF.ingredients.length === 0) {
+        list.innerHTML = `<div id="ing-empty" style="padding:16px;text-align:center;color:var(--hint);font-size:14px">
+            Нажмите «＋ Добавить», чтобы внести ингредиенты
+        </div>`;
+        return;
+    }
+    list.innerHTML = RF.ingredients.map((ing, i) => `
+        <div class="ingredient-row">
+            <input class="form-input ing-name" type="text" placeholder="Название" value="${esc(ing.name)}"
+                   oninput="RF.ingredients[${i}].name=this.value" autocomplete="off">
+            <input class="form-input ing-qty" type="number" placeholder="кол." value="${ing.qty||''}"
+                   min="0" step="any" oninput="RF.ingredients[${i}].qty=this.value">
+            <input class="form-input ing-unit" type="text" placeholder="г/шт" value="${esc(ing.unit)}"
+                   oninput="RF.ingredients[${i}].unit=this.value" autocomplete="off">
+            <button class="ing-del" onclick="removeIngredientRow(${i})">✕</button>
+        </div>
+    `).join('');
+}
+
+// ── Steps ─────────────────────────────────────────────────────────────────────
+
+function addStepRow() {
+    haptic('light');
+    RF.steps.push({text:''});
+    renderSteps();
+    const textareas = document.querySelectorAll('#steps-list textarea');
+    if (textareas.length) setTimeout(() => textareas[textareas.length-1].focus(), 80);
+}
+
+function removeStepRow(idx) {
+    haptic('light');
+    RF.steps.splice(idx, 1);
+    renderSteps();
+}
+
+function renderSteps() {
+    const list = $('steps-list');
+    if (!list) return;
+    if (RF.steps.length === 0) {
+        list.innerHTML = `<div style="padding:6px 0 10px;color:var(--hint);font-size:13px">
+            Шаги не обязательны, но помогут вспомнить рецепт
+        </div>`;
+        return;
+    }
+    list.innerHTML = RF.steps.map((step, i) => `
+        <div class="step-row">
+            <div class="step-num">${i+1}</div>
+            <textarea class="form-input" rows="2" placeholder="Шаг ${i+1}…"
+                      oninput="RF.steps[${i}].text=this.value">${esc(step.text)}</textarea>
+            <button class="ing-del" onclick="removeStepRow(${i})" style="margin-top:10px">✕</button>
+        </div>
+    `).join('');
+}
+
+function toggleSteps(toggleEl) {
+    const body = $('steps-body');
+    const isOpen = body.classList.contains('open');
+    body.classList.toggle('open', !isOpen);
+    toggleEl.querySelector('span').textContent = (isOpen ? '▶' : '▼') + ' Шаги приготовления';
+}
+
+// ── Submit ────────────────────────────────────────────────────────────────────
+
+async function submitFullRecipe() {
+    const name = $('recipe-name-full').value.trim();
+    if (!name) {
+        toast('Введите название блюда');
+        hapticNotif('error');
+        $('recipe-name-full').classList.add('error');
+        $('recipe-name-full').focus();
+        return;
+    }
+    $('recipe-name-full').classList.remove('error');
+
+    const emoji = document.querySelector('#recipe-emoji-picker .emoji-option.selected')?.dataset.emoji || '🍽';
+    const rawTime = parseInt($('recipe-cook-time').value);
+    const cook_time_min = rawTime > 0 ? rawTime : null;
+
+    const ingredients = RF.ingredients
+        .filter(i => (i.name||'').trim())
+        .map(i => ({
+            name: i.name.trim(),
+            qty: parseFloat(i.qty) || null,
+            unit: (i.unit||'').trim(),
+        }));
+
+    const steps = RF.steps
+        .filter(s => (s.text||'').trim())
+        .map(s => ({text: s.text.trim()}));
+
+    if (S.tg?.MainButton) { S.tg.MainButton.showProgress(false); S.tg.MainButton.disable(); }
+
+    try {
+        if (RF.editId) {
+            // EDIT existing recipe
+            await api(`/recipes/${RF.editId}`, 'PATCH', {
+                name, emoji,
+                servings: RF.servings,
+                cook_time_min,
+                ingredients,
+                steps,
+            });
+            hapticNotif('success');
+            toast('✅ Рецепт обновлён');
+            const editedId = RF.editId;
+            RF.editId = null;
+            // Reopen the detail screen with fresh data
+            await openRecipeDetail(editedId, RF.editFrom || 'library');
+        } else {
+            // CREATE new recipe linked to event
+            await api(`/events/${RF.eventId}/recipes`, 'POST', {
+                name, emoji,
+                servings: RF.servings,
+                cook_time_min,
+                ingredients,
+                steps,
+                added_by_name: S.user?.first_name || 'Гость',
+            });
+            hapticNotif('success');
+            toast(`🍽 Рецепт «${name}» добавлен!`);
+
+            // Back to detail
+            if (S.currentEvent) {
+                showScreen('s-detail');
+                setBackBtn(goHome);
+                setMainBtn('Список покупок →', goShoppingTab);
+                loadDetail(S.currentEvent.id);
+            } else {
+                goHome();
+            }
+        }
+    } catch(e) {
+        hapticNotif('error');
+        console.error('submitFullRecipe:', e);
+        toast(e.status === 401 ? 'Ошибка авторизации' : 'Не удалось сохранить рецепт');
+    } finally {
+        if (S.tg?.MainButton) { S.tg.MainButton.hideProgress(); S.tg.MainButton.enable(); }
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// RECIPE DETAIL SCREEN
+// ═══════════════════════════════════════════════════════════════════════════
+
+const RDETAIL = { recipe: null, from: null };
+
+// from: 'library' | 'event' | 'picker'
+async function openRecipeDetail(recipeId, from) {
+    haptic();
+    RDETAIL.from = from;
+    RDETAIL.recipe = null;
+
+    $('rdetail-title').textContent = '…';
+    $('rdetail-body').innerHTML = `
+        <div style="padding:48px 16px;text-align:center">
+            <div class="logo-spin" style="font-size:36px">🌿</div>
+        </div>`;
+    showScreen('s-rdetail');
+    setBackBtn(() => { haptic(); closeRdetail(); });
+    hideMainBtn();
+
+    try {
+        const r = await api('/recipes/' + recipeId);
+        RDETAIL.recipe = r;
+        $('rdetail-title').textContent = r.name;
+        renderRdetail(r);
+    } catch(e) {
+        $('rdetail-body').innerHTML = `
+            <div style="padding:40px;text-align:center;color:var(--hint);font-size:14px">
+                Не удалось загрузить рецепт
+            </div>`;
+    }
+}
+
+function closeRdetail() {
+    if (RDETAIL.from === 'library') {
+        showScreen('s-recipes');
+        setBackBtn(goHome);
+        hideMainBtn();
+    } else if (RDETAIL.from === 'picker') {
+        showScreen('s-pick-recipe');
+        setBackBtn(() => { haptic(); closePicker(); });
+        hideMainBtn();
+    } else {
+        // from event
+        showScreen('s-detail');
+        setBackBtn(goHome);
+        hideMainBtn();
+    }
+}
+
+function renderRdetail(r) {
+    const badges = [];
+    if (r.category) badges.push(r.category);
+    if (r.servings)          badges.push('🍽 ' + r.servings + ' порц.');
+    if (r.cook_time_minutes) badges.push('⏱ ' + r.cook_time_minutes + ' мин.');
+    if (r.times_cooked > 0)  badges.push('👨‍🍳 готовил ' + r.times_cooked + ' раз');
+
+    let html = '';
+
+    // Photo banner (imported from a Telegram photo)
+    if (r.source_photo_file_id) {
+        html += `
+        <div class="rdetail-photo">
+            <img src="${API}/files/photo/${encodeURIComponent(r.source_photo_file_id)}" alt=""
+                 onerror="this.closest('.rdetail-photo').style.display='none'">
+        </div>`;
+    }
+
+    html += `
+        <div class="rdetail-hero">
+            ${r.source_photo_file_id ? '' : `<span class="rdetail-emoji">${r.emoji || '🍽'}</span>`}
+            <div class="rdetail-name">${esc(r.name)}</div>
+            <div class="rdetail-badges">
+                ${badges.map(b => `<span class="rdetail-badge">${esc(b)}</span>`).join('')}
+            </div>
+        </div>`;
+
+    // Nutrition card
+    if (r.nutrition && r.nutrition.per_serving) {
+        const n = r.nutrition.per_serving;
+        html += `
+        <div class="card" style="margin:0 14px 10px;padding:16px;text-align:center">
+            <div style="font-size:11px;font-weight:600;color:var(--hint);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">
+                ПРИМЕРНО НА 1 ПОРЦИЮ
+            </div>
+            <div style="font-size:36px;font-weight:700;margin-bottom:2px">${n.kcal || 0}</div>
+            <div style="font-size:13px;color:var(--hint);margin-bottom:12px">ккал</div>
+            <div style="display:flex;justify-content:center;gap:24px;font-size:14px">
+                <span>Б ${n.protein_g || 0} г</span>
+                <span>Ж ${n.fat_g || 0} г</span>
+                <span>У ${n.carbs_g || 0} г</span>
+            </div>
+            <div style="font-size:11px;color:var(--hint);margin-top:12px;line-height:1.4">
+                Расчёт приблизительный. Фактические значения зависят от продуктов, их марки и способа приготовления.
+            </div>
+        </div>`;
+    }
+
+    // Source link — show the original site's domain
+    if (r.source_url) {
+        const safeUrl = r.source_url.replace(/'/g, '%27');
+        let domain = '';
+        try { domain = new URL(r.source_url).hostname.replace(/^www\./, ''); } catch {}
+        const label = domain ? `🔗 Оригинал: ${esc(domain)}` : '🔗 Открыть оригинал';
+        html += `
+        <div style="padding:0 14px 12px">
+            <button onclick="openLibUrl('${safeUrl}')"
+                style="background:none;border:1px solid var(--divider);border-radius:8px;
+                       padding:9px 14px;font-size:13px;color:var(--link);cursor:pointer;width:100%;
+                       text-overflow:ellipsis;overflow:hidden;white-space:nowrap">
+                ${label}
+            </button>
+        </div>`;
+    }
+
+    // Ingredients
+    if (r.ingredients && r.ingredients.length > 0) {
+        // Merge duplicate ingredient names (same name + unit → sum qty)
+        const mergeMap = new Map();
+        for (const ing of r.ingredients) {
+            const key = (ing.name || '').toLowerCase().trim()
+                      + '|' + (ing.unit || '').toLowerCase().trim();
+            if (mergeMap.has(key)) {
+                const ex = mergeMap.get(key);
+                if (ex.qty != null && ing.qty != null) ex.qty += ing.qty;
+                else if (ex.qty == null && ing.qty != null) ex.qty = ing.qty;
+            } else {
+                mergeMap.set(key, {...ing});
+            }
+        }
+        const ingredients = [...mergeMap.values()];
+
+        // Group by category
+        const groups = {};
+        const catOrder = ['мясо','рыба','овощи','фрукты','молочное','яйца','крупы',
+                          'мука','масло','соусы','специи','орехи','сахар','консервы',
+                          'хлеб','грибы','напитки','прочее'];
+        for (const ing of ingredients) {
+            const cat = ing.category || 'прочее';
+            (groups[cat] = groups[cat] || []).push(ing);
+        }
+        const sortedCats = Object.keys(groups).sort(
+            (a, b) => (catOrder.indexOf(a) + 1 || 99) - (catOrder.indexOf(b) + 1 || 99)
+        );
+        const multiCat = sortedCats.length > 1;
+
+        html += `<div class="card" style="margin-bottom:10px">
+            <div class="rdetail-section-title">🥄 Ингредиенты · ${ingredients.length}</div>`;
+        for (const cat of sortedCats) {
+            if (multiCat) html += `<div class="rdetail-cat-label">${esc(cat)}</div>`;
+            for (const ing of groups[cat]) {
+                const qtyNum = ing.qty ? fmtIngQty(ing.qty) : '';
+                const qtyStr = [qtyNum, ing.unit || ''].filter(Boolean).join(' ');
+                html += `
+                <div class="rdetail-ing-row">
+                    <span class="rdetail-ing-name">${esc(ing.name)}</span>
+                    ${qtyStr ? `<span class="rdetail-ing-qty">${esc(qtyStr)}</span>` : ''}
+                </div>`;
+            }
+        }
+        html += `</div>`;
+    } else {
+        html += `<div class="card" style="padding:18px 14px;text-align:center;margin-bottom:10px">
+            <div style="color:var(--hint);font-size:14px;margin-bottom:12px">Ингредиенты не добавлены</div>
+            <button class="btn btn-outline btn-sm" style="width:auto;padding:9px 20px;margin:0 auto"
+                    onclick="openRecipeEdit()">＋ Добавить ингредиенты</button>
+        </div>`;
+    }
+
+    // Steps
+    if (r.steps && r.steps.length > 0) {
+        html += `<div class="card" style="margin-bottom:10px">
+            <div class="rdetail-section-title">📋 Приготовление · ${r.steps.length} шагов</div>`;
+        for (const step of r.steps) {
+            html += `
+            <div class="rdetail-step-row">
+                <div class="rdetail-step-num">${step.step_number}</div>
+                <div class="rdetail-step-text">${esc(step.text)}</div>
+            </div>`;
+        }
+        html += `</div>`;
+    }
+
+    html += '<div style="height:16px"></div>';
+    $('rdetail-body').innerHTML = html;
+}
+
+function fmtIngQty(q) {
+    if (!q || q === 0) return '';
+    if (q === Math.floor(q)) return String(Math.floor(q));
+    return parseFloat(q.toFixed(2)).toString();
+}
+
+function openRdetailMenu() {
+    const r = RDETAIL.recipe;
+    if (!r) return;
+    haptic();
+    const items = [];
+    items.push({icon:'✏️', label:'Редактировать рецепт', fn:`closeSheet();openRecipeEdit()`});
+    // Offer auto-recognition only if some ingredient has no quantity
+    const needsQty = (r.ingredients || []).some(i => i.qty == null || i.qty === '');
+    if ((r.ingredients || []).length > 0 && needsQty) {
+        items.push({icon:'✨', label:'Распознать количества', fn:`closeSheet();normalizeRecipeIngredients()`});
+    }
+    // Nutrition calculation
+    if (r.nutrition) {
+        items.push({icon:'🔄', label:'Пересчитать КБЖУ — 1 балл', fn:`closeSheet();recalculateNutrition()`});
+    } else if ((r.ingredients || []).length > 0) {
+        items.push({icon:'✨', label:'Рассчитать КБЖУ — 1 балл', fn:`closeSheet();calculateNutrition()`});
+    }
+    if (r.source_url) {
+        const safe = r.source_url.replace(/'/g, '%27');
+        items.push({icon:'🔗', label:'Открыть источник', fn:`closeSheet();openLibUrl('${safe}')`});
+    }
+    items.push({icon:'📤', label:'Поделиться рецептом', fn:`closeSheet();shareRecipe(${r.id})`});
+    if (RDETAIL.from === 'event') {
+        items.push({icon:'🗑', label:'Удалить из события',
+            fn:`closeSheet();closeRdetail();deleteRecipe(${r.id})`, destructive:true});
+    } else {
+        items.push({icon:'🗑', label:'Удалить рецепт',
+            fn:`closeSheet();deleteLibRecipe(${r.id})`, destructive:true});
+    }
+    openSheet((r.emoji || '🍽') + ' ' + r.name, items);
+}
+
+async function normalizeRecipeIngredients() {
+    const r = RDETAIL.recipe;
+    if (!r) return;
+    haptic();
+    toast('✨ Распознаю количества…');
+    try {
+        await api(`/recipes/${r.id}/normalize-ingredients`, 'POST');
+        await openRecipeDetail(r.id, RDETAIL.from);   // reload with fresh data
+        hapticNotif('success');
+    } catch(e) {
+        hapticNotif('error');
+        toast('Не удалось распознать количества');
+    }
+}
+
+async function calculateNutrition() {
+    const r = RDETAIL.recipe;
+    if (!r) return;
+    haptic();
+
+    // Confirm before spending point
+    const confirmed = confirm('Рассчитать КБЖУ за 1 балл?');
+    if (!confirmed) return;
+
+    toast('✨ Рассчитываю КБЖУ…');
+    try {
+        const result = await api(`/recipes/${r.id}/calculate-nutrition`, 'POST');
+        // Reload recipe with nutrition data
+        await openRecipeDetail(r.id, RDETAIL.from);
+        hapticNotif('success');
+        toast('КБЖУ рассчитано');
+    } catch(e) {
+        hapticNotif('error');
+        const msg = e?.message || 'Не удалось рассчитать КБЖУ';
+        toast(msg);
+    }
+}
+
+async function recalculateNutrition() {
+    await calculateNutrition();
+}
+
+async function shareRecipe(recipeId) {
+    const tg = window.Telegram?.WebApp;
+    if (!tg) {
+        toast('Откройте ПОЛЯНУ внутри Telegram');
+        return;
+    }
+
+    // Try savePreparedInlineMessage + shareMessage (Telegram 8.0+)
+    if (typeof tg.shareMessage === 'function' && tg.isVersionAtLeast('8.0')) {
+        let unlocked = false;
+        const unlock = () => { if (!unlocked) { unlocked = true; clearTimeout(timer); } };
+        const timer = setTimeout(unlock, 15000); // safety timeout
+
+        try {
+            toast('📤 Готовлю рецепт…');
+            const data = await api(`/recipes/${recipeId}/prepare-share`, 'POST');
+            if (data.prepared_message_id) {
+                tg.shareMessage(data.prepared_message_id, (success) => {
+                    unlock();
+                    if (success) {
+                        hapticNotif('success');
+                        toast('✅ Рецепт отправлен!');
+                    }
+                });
+                return;
+            }
+            // fallback if prepared_message_id is null
+            unlock();
+        } catch(e) {
+            unlock();
+            console.error('prepare-share failed:', e);
+        }
+    }
+
+    // Fallback for old Telegram: open inline query with hint
+    toast('Напишите @reciptesbot в чате с другом и выберите рецепт');
+}
+
+function showShareScreen(token) {
+    const tg = window.Telegram?.WebApp;
+    if (!tg) return;
+
+    // Show a minimal share screen
+    const page = $('home-page');
+    page.innerHTML = `
+        <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:60vh;text-align:center;padding:24px">
+            <div style="font-size:48px;margin-bottom:16px">📤</div>
+            <div style="font-size:18px;font-weight:700;margin-bottom:8px">Поделиться рецептом</div>
+            <div style="color:var(--hint);font-size:14px;margin-bottom:24px">Нажмите кнопку, чтобы выбрать чат</div>
+            <button class="btn btn-green" id="share-send-btn" style="max-width:300px" onclick="executeShare('${token}')">
+                Выбрать чат и отправить
+            </button>
+            <button class="btn btn-outline" style="max-width:300px;margin-top:8px" onclick="history.back()">Отмена</button>
+        </div>
+    `;
+}
+
+async function executeShare(token) {
+    const tg = window.Telegram?.WebApp;
+    if (!tg) return;
+
+    const btn = $('share-send-btn');
+    if (btn) { btn.disabled = true; btn.textContent = 'Готовлю…'; }
+
+    let unlocked = false;
+    const unlock = () => { if (!unlocked) { unlocked = true; clearTimeout(timer); } };
+    const timer = setTimeout(() => { unlock(); if (btn) { btn.disabled = false; btn.textContent = 'Выбрать чат и отправить'; } }, 15000);
+
+    try {
+        const data = await api(`/recipes/share/${token}/prepare-message`, 'POST');
+        if (data.prepared_message_id) {
+            tg.shareMessage(data.prepared_message_id, (success) => {
+                unlock();
+                if (success) {
+                    hapticNotif('success');
+                    toast('✅ Рецепт отправлен!');
+                    tg.close();
+                } else {
+                    if (btn) { btn.disabled = false; btn.textContent = 'Выбрать чат и отправить'; }
+                }
+            });
+            return;
+        }
+        unlock();
+        if (btn) { btn.disabled = false; btn.textContent = 'Выбрать чат и отправить'; }
+        toast('Не удалось подготовить рецепт');
+    } catch(e) {
+        unlock();
+        if (btn) { btn.disabled = false; btn.textContent = 'Выбрать чат и отправить'; }
+        console.error(e);
+        toast('Ошибка подготовки');
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// LIBRARY PICKER (add recipe from library to event)
+// ═══════════════════════════════════════════════════════════════════════════
+
+const PICKER = { eventId: null, recipes: [], q: '', loading: false };
+
+function openLibraryPicker(eventId) {
+    haptic();
+    PICKER.eventId = eventId;
+    PICKER.q = '';
+    $('picker-search').value = '';
+    showScreen('s-pick-recipe');
+    setBackBtn(() => { haptic(); closePicker(); });
+    hideMainBtn();
+    loadPickerRecipes();
+}
+
+function closePicker() {
+    showScreen('s-detail');
+    setBackBtn(goHome);
+    hideMainBtn();
+}
+
+async function loadPickerRecipes() {
+    if (PICKER.loading) return;
+    PICKER.loading = true;
+    $('picker-list').innerHTML = `
+        <div class="skeleton-row"><div class="skeleton skeleton-circle"></div>
+        <div class="skeleton-lines"><div class="skeleton skeleton-line"></div>
+        <div class="skeleton skeleton-line short"></div></div></div>
+        <div class="skeleton-row"><div class="skeleton skeleton-circle"></div>
+        <div class="skeleton-lines"><div class="skeleton skeleton-line"></div>
+        <div class="skeleton skeleton-line short"></div></div></div>
+        <div class="skeleton-row"><div class="skeleton skeleton-circle"></div>
+        <div class="skeleton-lines"><div class="skeleton skeleton-line"></div>
+        <div class="skeleton skeleton-line short"></div></div></div>
+    `;
+    try {
+        const qs = PICKER.q ? '?q=' + encodeURIComponent(PICKER.q) : '';
+        const data = await api('/recipes' + qs);
+        PICKER.recipes = data.recipes || [];
+        renderPickerRecipes();
+    } catch(e) {
+        $('picker-list').innerHTML = `<div style="padding:24px;text-align:center;color:var(--hint);font-size:14px">Не удалось загрузить</div>`;
+    } finally {
+        PICKER.loading = false;
+    }
+}
+
+function renderPickerRecipes() {
+    if (PICKER.recipes.length === 0) {
+        $('picker-list').innerHTML = `
+            <div class="empty-state" style="padding:36px 24px">
+                <div class="empty-icon">${PICKER.q ? '🔍' : '📖'}</div>
+                <div class="empty-title">${PICKER.q ? 'Ничего не найдено' : 'Библиотека пуста'}</div>
+                <div class="empty-sub">${PICKER.q ? 'Попробуйте другой запрос' : 'Сначала добавьте рецепты через бота или кнопку ниже'}</div>
+            </div>`;
+        return;
+    }
+
+    $('picker-list').innerHTML = PICKER.recipes.map(r => {
+        const parts = [];
+        if (r.servings) parts.push(r.servings + ' порц.');
+        if (r.cook_time_minutes) parts.push('⏱ ' + r.cook_time_minutes + ' мин.');
+        if (r.ingredients_count > 0) parts.push('🥄 ' + r.ingredients_count + ' ингр.');
+        const meta = parts.join(' · ');
+        const safeName = esc(r.name).replace(/'/g, '&#39;');
+        return `
+        <div class="lib-recipe-card" style="padding-right:10px">
+            <div class="lib-recipe-emoji">${r.emoji || '🍽'}</div>
+            <div class="lib-recipe-info">
+                <div class="lib-recipe-name">${esc(r.name)}</div>
+                ${meta ? '<div class="lib-recipe-meta">' + meta + '</div>' : ''}
+            </div>
+            <button onclick="pickAndAdd(${PICKER.eventId},${r.id},'${safeName}')"
+                    style="flex-shrink:0;background:var(--green);color:#fff;border:none;
+                           border-radius:10px;padding:8px 16px;font-size:15px;font-weight:700;
+                           cursor:pointer;line-height:1">
+                ＋
+            </button>
+        </div>`;
+    }).join('');
+}
+
+let _pickerTimer = null;
+function debouncedPickerSearch() {
+    clearTimeout(_pickerTimer);
+    _pickerTimer = setTimeout(() => {
+        PICKER.q = $('picker-search').value.trim();
+        loadPickerRecipes();
+    }, 400);
+}
+
+async function pickAndAdd(eventId, recipeId, recipeName) {
+    haptic();
+    try {
+        await api('/events/' + eventId + '/recipes', 'POST', { recipe_id: recipeId });
+        hapticNotif('success');
+        toast('🍽 «' + recipeName + '» добавлен!');
+        closePicker();
+        loadDetail(eventId);
+    } catch(e) {
+        if (e.status === 409 || (e.message||'').includes('conflict')) {
+            toast('Этот рецепт уже есть в событии');
+        } else {
+            toast('Не удалось добавить рецепт');
+        }
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SHOPPING LIST
+// ═══════════════════════════════════════════════════════════════════════════
+
+const SHOP = { items: [], total: 0, bought: 0, loading: false };
+
+async function loadShopping(eventId, silent=false) {
+    if (SHOP.loading) return;
+    SHOP.loading = true;
+    if (!silent) renderShoppingLoading();
+    try {
+        const data = await api(`/events/${eventId}/shopping`);
+        SHOP.items = data.items || [];
+        SHOP.total = data.total || 0;
+        SHOP.bought = data.bought || 0;
+        SHOP.linkedRecipes = data.linked_recipes || 0;
+        SHOP.ingredientRows = data.ingredient_rows || 0;
+        SHOP.genError = data.debug_gen_error || null;
+        renderShopping(eventId);
+    } catch(e) {
+        console.error('loadShopping:', e);
+        $('shopping-list-inner').innerHTML = `
+            <div style="padding:24px;text-align:center;color:var(--hint);font-size:14px">
+                Не удалось загрузить список покупок
+            </div>`;
+    } finally {
+        SHOP.loading = false;
+    }
+}
+
+function renderShoppingLoading() {
+    $('shopping-list-inner').innerHTML = `
+        <div class="skeleton-row"><div class="skeleton skeleton-circle" style="width:22px;height:22px;border-radius:50%"></div>
+        <div class="skeleton-lines"><div class="skeleton skeleton-line"></div></div></div>
+        <div class="skeleton-row"><div class="skeleton skeleton-circle" style="width:22px;height:22px;border-radius:50%"></div>
+        <div class="skeleton-lines"><div class="skeleton skeleton-line"></div></div></div>
+        <div class="skeleton-row"><div class="skeleton skeleton-circle" style="width:22px;height:22px;border-radius:50%"></div>
+        <div class="skeleton-lines"><div class="skeleton skeleton-line"></div></div></div>
+    `;
+}
+
+function renderShopping(eventId) {
+    const inner = $('shopping-list-inner');
+    if (!inner) return;
+
+    const pct = SHOP.total > 0 ? Math.round(SHOP.bought / SHOP.total * 100) : 0;
+
+    let html = '';
+
+    if (SHOP.total > 0) {
+        html += `
+        <div class="shop-header">
+            <div class="shop-counter">
+                ${SHOP.bought === SHOP.total && SHOP.total > 0
+                    ? '✅ Всё куплено!'
+                    : `Куплено: <b>${SHOP.bought}</b> из <b>${SHOP.total}</b>`}
+            </div>
+            <button class="shop-sync-btn" onclick="syncShopping(${eventId})">🔄 Обновить</button>
+        </div>
+        <div class="shop-progress-bar">
+            <div class="shop-progress-fill" id="shop-pbar" style="width:${pct}%"></div>
+        </div>`;
+
+        for (const group of SHOP.items) {
+            html += `<div class="shop-category">${esc(group.name)}</div>`;
+            for (const item of group.items) {
+                const cls = item.bought ? ' bought' : '';
+                const qtyLabel = item.quantity || '';
+                const isManual = !item.is_generated;
+                html += `
+                <div class="shop-item${cls}" id="sitem-${item.id}">
+                    <div class="shop-check" onclick="toggleShoppingItem(${eventId},${item.id})">
+                        <span class="shop-check-icon">✓</span>
+                    </div>
+                    <div class="shop-item-name" onclick="toggleShoppingItem(${eventId},${item.id})">${esc(item.name)}</div>
+                    ${qtyLabel ? `<div class="shop-item-qty">${esc(qtyLabel)}</div>` : ''}
+                    ${isManual ? `<button class="shop-del-btn" onclick="deleteShoppingItem(${eventId},${item.id})" aria-label="Удалить">✕</button>` : ''}
+                </div>`;
+            }
+        }
+    } else {
+        let sub, action = '';
+        if ((SHOP.linkedRecipes || 0) === 0) {
+            sub = 'К событию не привязано ни одного рецепта. Добавьте блюдо во вкладке «Меню» или впишите позицию вручную ниже.';
+        } else if ((SHOP.ingredientRows || 0) === 0) {
+            sub = `Рецептов привязано: ${SHOP.linkedRecipes}, но у них не заданы ингредиенты. Откройте рецепт и добавьте ингредиенты — тогда они появятся здесь.`;
+        } else {
+            sub = `Найдено ингредиентов в рецептах: ${SHOP.ingredientRows}, но список не собрался. Нажмите «Собрать из рецептов».`;
+            action = `<button class="shop-sync-btn" style="margin-top:12px" onclick="syncShopping(${eventId})">🔄 Собрать из рецептов</button>`;
+        }
+        html += `
+            <div class="empty-state" style="padding:24px 24px 12px">
+                <div class="empty-icon">🛒</div>
+                <div class="empty-title">Список пуст</div>
+                <div class="empty-sub">${esc(sub)}</div>
+                ${action}
+            </div>`;
+    }
+
+    // Manual add form — always visible
+    html += `
+    <div class="shop-add-row" id="shop-add-row">
+        <input id="shop-add-name" class="shop-add-input" placeholder="Добавить позицию…" maxlength="80"
+               onkeydown="if(event.key==='Enter')addCustomShoppingItem(${eventId})">
+        <input id="shop-add-qty" class="shop-add-qty" placeholder="кол-во" maxlength="20"
+               onkeydown="if(event.key==='Enter')addCustomShoppingItem(${eventId})">
+        <button class="shop-add-btn" onclick="addCustomShoppingItem(${eventId})">＋</button>
+    </div>`;
+
+    inner.innerHTML = html;
+    // Focus if user tapped the add area
+}
+
+async function toggleShoppingItem(eventId, itemId) {
+    haptic('light');
+
+    // Flip from CURRENT state (onclick no longer bakes a stale literal, so the
+    // checkbox toggles both ways without a full re-render).
+    let cur = false;
+    for (const group of SHOP.items) {
+        const it = group.items.find(i => i.id === itemId);
+        if (it) { cur = !!it.bought; break; }
+    }
+    const newBought = !cur;
+
+    // Optimistic update
+    const el = $('sitem-' + itemId);
+    if (el) {
+        el.classList.toggle('bought', newBought);
+        SHOP.bought += newBought ? 1 : -1;
+        const counter = document.querySelector('.shop-counter');
+        if (counter) {
+            if (SHOP.bought === SHOP.total) {
+                counter.innerHTML = '✅ Всё куплено!';
+                hapticNotif('success');
+            } else {
+                counter.innerHTML = `Куплено: <b>${SHOP.bought}</b> из <b>${SHOP.total}</b>`;
+            }
+        }
+        const pbar = $('shop-pbar');
+        if (pbar) pbar.style.width = Math.round(SHOP.bought / SHOP.total * 100) + '%';
+    }
+
+    // Update in SHOP.items state
+    for (const group of SHOP.items) {
+        const item = group.items.find(i => i.id === itemId);
+        if (item) { item.bought = newBought; break; }
+    }
+
+    try {
+        await api(`/events/${eventId}/shopping/${itemId}`, 'PATCH', { bought: newBought });
+    } catch {
+        // Revert on error
+        loadShopping(eventId, true);
+    }
+}
+
+async function syncShopping(eventId) {
+    haptic();
+    const btn = document.querySelector('.shop-sync-btn');
+    if (btn) { btn.textContent = '⏳'; btn.disabled = true; }
+    try {
+        await api(`/events/${eventId}/shopping/sync`, 'POST');
+        await loadShopping(eventId, true);
+        toast('Список обновлён');
+    } catch {
+        toast('Не удалось обновить список');
+    } finally {
+        if (btn) { btn.textContent = '🔄 Обновить'; btn.disabled = false; }
+    }
+}
+
+async function addCustomShoppingItem(eventId) {
+    const nameEl = $('shop-add-name');
+    const qtyEl  = $('shop-add-qty');
+    const name   = (nameEl?.value || '').trim();
+    if (!name) { nameEl?.focus(); return; }
+    haptic('light');
+    const qty = (qtyEl?.value || '').trim();
+    // Optimistic clear
+    if (nameEl) nameEl.value = '';
+    if (qtyEl)  qtyEl.value  = '';
+    try {
+        await api(`/events/${eventId}/shopping`, 'POST', { name, quantity: qty || null });
+        await loadShopping(eventId, true);
+    } catch (e) {
+        toast(e && e.message ? ('Не удалось добавить: ' + e.message) : 'Не удалось добавить');
+        if (nameEl) nameEl.value = name;
+    }
+}
+
+async function deleteShoppingItem(eventId, itemId) {
+    haptic('light');
+    // Optimistic: hide row
+    const el = $('sitem-' + itemId);
+    if (el) el.style.opacity = '0.3';
+    try {
+        await api(`/events/${eventId}/shopping/${itemId}`, 'DELETE');
+        await loadShopping(eventId, true);
+    } catch {
+        toast('Не удалось удалить');
+        if (el) el.style.opacity = '';
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// MY RECIPES LIBRARY SCREEN
+// ═══════════════════════════════════════════════════════════════════════════
+
+const LIB = { recipes: [], q: '', category: '', loading: false };
+
+function goRecipes() {
+    haptic();
+    showScreen('s-recipes');
+    setBackBtn(goHome);
+    hideMainBtn();
+    // Reset search + category
+    $('lib-search').value = '';
+    LIB.q = '';
+    LIB.category = '';
+    document.querySelectorAll('.cat-chip').forEach(c =>
+        c.classList.toggle('active', c.dataset.cat === '')
+    );
+    loadLibRecipes();
+}
+
+async function loadLibRecipes() {
+    if (LIB.loading) return;
+    LIB.loading = true;
+
+    // Show skeleton
+    $('lib-list').innerHTML = `
+        <div class="skeleton-row"><div class="skeleton skeleton-circle"></div>
+        <div class="skeleton-lines"><div class="skeleton skeleton-line"></div>
+        <div class="skeleton skeleton-line short"></div></div></div>
+        <div class="skeleton-row"><div class="skeleton skeleton-circle"></div>
+        <div class="skeleton-lines"><div class="skeleton skeleton-line"></div>
+        <div class="skeleton skeleton-line short"></div></div></div>
+        <div class="skeleton-row"><div class="skeleton skeleton-circle"></div>
+        <div class="skeleton-lines"><div class="skeleton skeleton-line"></div>
+        <div class="skeleton skeleton-line short"></div></div></div>
+    `;
+
+    try {
+        const params = new URLSearchParams();
+        if (LIB.q) params.set('q', LIB.q);
+        if (LIB.category) params.set('category', LIB.category);
+        const qs = params.toString();
+        const data = await api('/recipes' + (qs ? '?' + qs : ''));
+        LIB.recipes = data.recipes || [];
+        renderLibRecipes();
+    } catch(e) {
+        console.error('loadLibRecipes:', e);
+        $('lib-list').innerHTML = `
+            <div style="padding:24px;text-align:center;color:var(--hint);font-size:14px">
+                Не удалось загрузить рецепты
+            </div>`;
+    } finally {
+        LIB.loading = false;
+    }
+}
+
+function renderLibRecipes() {
+    const count = LIB.recipes.length;
+    $('lib-count-badge').textContent = count ? count + ' рец.' : '';
+
+    if (count === 0) {
+        const isEmpty = !LIB.q && !LIB.category;
+        $('lib-list').innerHTML = `
+            <div class="empty-state" style="padding:40px 24px">
+                <div class="empty-icon">${isEmpty ? '📖' : '🔍'}</div>
+                <div class="empty-title">${isEmpty ? 'Библиотека пуста' : 'Ничего не найдено'}</div>
+                <div class="empty-sub">${isEmpty
+                    ? 'Отправь боту ссылку на рецепт или добавь вручную'
+                    : 'Попробуйте другой запрос'}</div>
+                ${isEmpty ? `<button class="btn btn-green"
+                    style="max-width:220px;margin:0 auto"
+                    onclick="openLibAddRecipe()">＋ Добавить рецепт</button>` : ''}
+            </div>`;
+        return;
+    }
+
+    $('lib-list').innerHTML = LIB.recipes.map(r => {
+        const stars   = renderStars(r.rating);
+        const cooked  = r.times_cooked > 0
+            ? `готовил ${r.times_cooked} ${pluralTimes(r.times_cooked)}` : '';
+        const servings = r.servings ? r.servings + ' порц.' : '';
+        const ctime    = r.cook_time_minutes ? '⏱ ' + r.cook_time_minutes + ' мин.' : '';
+        const ingr     = r.ingredients_count > 0 ? '🥄 ' + r.ingredients_count + ' ингр.' : '';
+        const line1    = [stars, cooked].filter(Boolean).join(' · ');
+        const line2    = [servings, ctime, ingr].filter(Boolean).join(' · ');
+        return `
+        <div class="lib-recipe-card" onclick="viewLibRecipe(${r.id})">
+            <div class="lib-recipe-emoji">${r.emoji || '🍽'}</div>
+            <div class="lib-recipe-info">
+                <div class="lib-recipe-name">${esc(r.name)}</div>
+                ${line1 ? `<div class="lib-recipe-meta">${line1}</div>` : ''}
+                ${line2 ? `<div class="lib-recipe-meta">${line2}</div>` : ''}
+            </div>
+        </div>`;
+    }).join('');
+}
+
+function renderStars(rating) {
+    if (!rating || rating < 1) return '';
+    const full = Math.min(5, Math.round(rating));
+    return '<span class="stars">' +
+        Array.from({length: 5}, (_, i) =>
+            `<span${i >= full ? ' class="dim"' : ''}>★</span>`
+        ).join('') +
+    '</span>';
+}
+
+function pluralTimes(n) {
+    if (n % 10 === 1 && n % 100 !== 11) return 'раз';
+    if ([2,3,4].includes(n % 10) && ![12,13,14].includes(n % 100)) return 'раза';
+    return 'раз';
+}
+
+let _libSearchTimer = null;
+function debouncedLibSearch() {
+    clearTimeout(_libSearchTimer);
+    _libSearchTimer = setTimeout(() => {
+        LIB.q = $('lib-search').value.trim();
+        loadLibRecipes();
+    }, 400);
+}
+
+function libFilterCat(btn) {
+    haptic('light');
+    document.querySelectorAll('.cat-chip').forEach(c => c.classList.remove('active'));
+    btn.classList.add('active');
+    LIB.category = btn.dataset.cat;
+    loadLibRecipes();
+}
+
+function openLibAddRecipe() {
+    haptic();
+    RF.eventId = null;
+    RF.servings = 4;
+    RF.ingredients = [];
+    RF.steps = [];
+
+    $('recipe-name-full').value = '';
+    $('recipe-cook-time').value = '';
+    $('recipe-name-full').classList.remove('error');
+    $('recipe-screen-title').textContent = 'Новый рецепт';
+    $('servings-display').textContent = RF.servings;
+
+    $('recipe-emoji-picker').innerHTML = RECIPE_EMOJIS.map((em, i) =>
+        `<button class="emoji-option${i===0?' selected':''}" data-emoji="${em}"
+                 onclick="selectRecipeEmoji(this)">${em}</button>`
+    ).join('');
+
+    renderIngredients();
+    renderSteps();
+    $('steps-body').classList.remove('open');
+    const stTgl = document.querySelector('#s-recipe .collapsible-toggle span');
+    if (stTgl) stTgl.textContent = '▶ Шаги приготовления';
+
+    showScreen('s-recipe');
+    setBackBtn(() => { haptic(); goRecipesBack(); });
+    setMainBtn('💾 Сохранить в библиотеку', submitLibRecipe);
+
+    setTimeout(() => $('recipe-name-full').focus(), 350);
+}
+
+function goRecipesBack() {
+    showScreen('s-recipes');
+    setBackBtn(goHome);
+    hideMainBtn();
+}
+
+async function submitLibRecipe() {
+    const name = $('recipe-name-full').value.trim();
+    if (!name) {
+        toast('Введите название блюда');
+        hapticNotif('error');
+        $('recipe-name-full').classList.add('error');
+        $('recipe-name-full').focus();
+        return;
+    }
+    $('recipe-name-full').classList.remove('error');
+
+    const emoji = document.querySelector('#recipe-emoji-picker .emoji-option.selected')?.dataset.emoji || '🍽';
+    const rawTime = parseInt($('recipe-cook-time').value);
+    const cook_time_min = rawTime > 0 ? rawTime : null;
+
+    const ingredients = RF.ingredients
+        .filter(i => (i.name||'').trim())
+        .map(i => ({
+            name: i.name.trim(),
+            qty: parseFloat(i.qty) || null,
+            unit: (i.unit||'').trim(),
+        }));
+
+    const steps = RF.steps
+        .filter(s => (s.text||'').trim())
+        .map(s => ({text: s.text.trim()}));
+
+    if (S.tg?.MainButton) { S.tg.MainButton.showProgress(false); S.tg.MainButton.disable(); }
+
+    try {
+        await api('/recipes', 'POST', {
+            name, emoji,
+            servings: RF.servings,
+            cook_time_min,
+            ingredients,
+            steps,
+        });
+        hapticNotif('success');
+        toast('📖 «' + name + '» сохранён в библиотеку!');
+        goRecipesBack();
+        loadLibRecipes();
+    } catch(e) {
+        hapticNotif('error');
+        console.error('submitLibRecipe:', e);
+        toast(e.status === 401 ? 'Ошибка авторизации' : 'Не удалось сохранить рецепт');
+    } finally {
+        if (S.tg?.MainButton) { S.tg.MainButton.hideProgress(); S.tg.MainButton.enable(); }
+    }
+}
+
+function viewLibRecipe(id) {
+    openRecipeDetail(id, 'library');
+}
+
+function openLibUrl(url) {
+    try { S.tg?.openLink?.(url) || window.open(url, '_blank'); } catch {}
+}
+
+async function deleteLibRecipe(id) {
+    LIB.recipes = LIB.recipes.filter(r => r.id !== id);
+    renderLibRecipes();
+    toast('Рецепт удалён', () => { loadLibRecipes(); }, 5000);
+    try {
+        await api('/recipes/' + id, 'DELETE');
+    } catch {
+        loadLibRecipes();
+    }
+}
+
+
+// ── QUICK SHARE DIRECT FLOW ────────────────────────────────────────────────────────────
+
+function showQuickShareView(title, message, recipeId = null) {
+    showScreen('s-home');
+    hideMainBtn();
+
+    setBackBtn(() => {
+        try {
+            S.tg?.close?.();
+        } catch {}
+    });
+
+    const page = $('home-page');
+
+    if (!page) return;
+
+    const retryButton = recipeId
+        ? `
+            <button
+                class="btn btn-green"
+                style="max-width:320px;margin-top:20px"
+                onclick="runQuickShare(${recipeId})"
+            >
+                📤 Попробовать ещё раз
+            </button>
+        `
+        : '';
+
+    page.innerHTML = `
+        <div style="
+            min-height:75vh;
+            display:flex;
+            flex-direction:column;
+            align-items:center;
+            justify-content:center;
+            text-align:center;
+            padding:28px
+        ">
+            <div style="font-size:52px;margin-bottom:18px">
+                📤
+            </div>
+
+            <div style="
+                font-size:20px;
+                font-weight:700;
+                margin-bottom:10px
+            ">
+                ${esc(title)}
+            </div>
+
+            <div style="
+                color:var(--hint);
+                font-size:15px;
+                line-height:1.5;
+                max-width:340px
+            ">
+                ${esc(message)}
+            </div>
+
+            ${retryButton}
+
+            <button
+                class="btn btn-outline"
+                style="max-width:320px;margin-top:10px"
+                onclick="S.tg?.close?.()"
+            >
+                Закрыть
+            </button>
+        </div>
+    `;
+}
+
+
+async function runQuickShare(recipeId) {
+    const tg = S.tg || window.Telegram?.WebApp;
+
+    showQuickShareView(
+        'Готовим отправку',
+        'Сейчас откроется выбор получателя.'
+    );
+
+    if (
+        !tg
+        || typeof tg.shareMessage !== 'function'
+        || (
+            typeof tg.isVersionAtLeast === 'function'
+            && !tg.isVersionAtLeast('8.0')
+        )
+    ) {
+        showQuickShareView(
+            'Обновите Telegram',
+            'Эта версия Telegram не поддерживает быструю отправку рецептов.',
+            recipeId
+        );
+        return;
+    }
+
+    try {
+        const data = await api(
+            `/recipes/${recipeId}/prepare-share`,
+            'POST'
+        );
+
+        const preparedId = data?.prepared_message_id;
+
+        if (!preparedId) {
+            throw new Error(
+                'prepared_message_id missing'
+            );
+        }
+
+        let completed = false;
+
+        const timeout = setTimeout(() => {
+            if (completed) return;
+
+            completed = true;
+
+            showQuickShareView(
+                'Не удалось открыть отправку',
+                'Попробуйте нажать кнопку ещё раз.',
+                recipeId
+            );
+        }, 30000);
+
+        tg.shareMessage(
+            preparedId,
+            success => {
+                if (completed) return;
+
+                completed = true;
+                clearTimeout(timeout);
+
+                if (success) {
+                    hapticNotif('success');
+
+                    showQuickShareView(
+                        'Рецепт отправлен',
+                        'Готово.'
+                    );
+
+                    setTimeout(() => {
+                        try {
+                            tg.close();
+                        } catch {}
+                    }, 350);
+
+                    return;
+                }
+
+                showQuickShareView(
+                    'Отправка отменена',
+                    'Рецепт не был отправлен.',
+                    recipeId
+                );
+            }
+        );
+
+    } catch (error) {
+        console.error(
+            'quick share failed:',
+            error
+        );
+
+        hapticNotif('error');
+
+        showQuickShareView(
+            'Не удалось подготовить рецепт',
+            'Попробуйте ещё раз.',
+            recipeId
+        );
+    }
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// OFFLINE DETECTION
+// ═══════════════════════════════════════════════════════════════════════════
+window.addEventListener('online',  () => $('offline-banner').classList.remove('show'));
+window.addEventListener('offline', () => $('offline-banner').classList.add('show'));
+if (!navigator.onLine) $('offline-banner').classList.add('show');
+
+// ═══════════════════════════════════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════════════════════════════════
+document.addEventListener('DOMContentLoaded', async () => {
+    // Parse URL params
+    const params = new URLSearchParams(window.location.search);
+    const startParam = params.get('startapp') || params.get('tgWebAppStartParam');
+
+    // Telegram init
+    if (window.Telegram?.WebApp) {
+        S.tg = window.Telegram.WebApp;
+        S.tg.ready();
+        S.tg.expand();
+        try { S.tg.setHeaderColor?.('#2d7a3e'); } catch {}
+        try { S.tg.setBackgroundColor?.(getComputedStyle(document.documentElement).getPropertyValue('--bg2').trim() || '#f2f2f7'); } catch {}
+
+        S.initData = S.tg.initData || '';
+        const u = S.tg.initDataUnsafe?.user;
+        if (u) {
+            S.user = {
+                id: u.id,
+                first_name: u.first_name || '',
+                last_name: u.last_name || '',
+                username: u.username || '',
+            };
+        }
+    }
+
+    if (S.user) {
+        // Direct sharing from the bot button.
+        // Do not load onboarding, home or recipe library.
+        const requestedScreen = params.get('screen');
+        const quickShareRecipeId = Number.parseInt(
+            params.get('recipe_id') || '',
+            10
+        );
+
+        if (
+            requestedScreen === 'quick_share'
+            && Number.isInteger(quickShareRecipeId)
+            && quickShareRecipeId > 0
+        ) {
+            await runQuickShare(quickShareRecipeId);
+            return;
+        }
+
+        // Check onboarding status first
+        const onboardingDone = await startOnboarding();
+        if (onboardingDone) {
+            hideMainBtn();
+            return; // onboarding screen is shown
+        }
+
+        // Update greeting
+        $('greeting-name').textContent = `Привет, ${S.user.first_name}! 👋`;
+        $('greeting-sub').textContent = 'Что планируем?';
+
+        // Deep link: share recipe
+        if (startParam && startParam.startsWith('share_')) {
+            const token = startParam.replace('share_', '');
+            showScreen('s-home');
+            // Show share screen inline
+            showShareScreen(token);
+        }
+        // Deep link: open specific event
+        else if (startParam && startParam.startsWith('event_')) {
+            const eid = parseInt(startParam.replace('event_', ''));
+            showScreen('s-home');
+            await loadEvents();
+            const ev = S.events.find(e => e.id === eid);
+            if (ev) {
+                goDetail(ev);
+            } else {
+                // Try join + load directly
+                try {
+                    await api(`/events/${eid}/join`, 'POST', {
+                        first_name: S.user.first_name,
+                        username: S.user.username,
+                    });
+                    await loadEvents();
+                    const joined = S.events.find(e => e.id === eid);
+                    if (joined) goDetail(joined);
+                } catch {
+                    toast('Событие не найдено или недоступно');
+                }
+            }
+        } else {
+            showScreen('s-home');
+            loadEvents();
+        }
+
+        hideMainBtn();
+    } else if (startParam && startParam.startsWith('event_')) {
+        // Not in Telegram — show shared view
+        const eid = parseInt(startParam.replace('event_', ''));
+        showScreen('s-shared');
+        try {
+            const ev = await fetch(`${API}/events/shared/${eid}`).then(r=>r.json());
+            $('shared-name').textContent = ev.name || 'Событие';
+            $('shared-meta').textContent = [formatDate(ev.event_date), ev.location].filter(Boolean).join(' · ');
+            $('shared-open-btn').href = `https://t.me/${BOT}?start=event_${eid}`;
+        } catch {
+            $('shared-name').textContent = 'Событие';
+            $('shared-open-btn').href = `https://t.me/${BOT}`;
+        }
+    } else {
+        showScreen('s-auth');
+    }
+});
+</script>
+</body>
+</html>

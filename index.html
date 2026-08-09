@@ -3572,34 +3572,64 @@ async function shareRecipe(recipeId) {
     }
 
     // Try savePreparedInlineMessage + shareMessage (Telegram 8.0+)
+    // Fallback: if shareMessage callback doesn't fire within 6s, use
+    // openTelegramLink with t.me/share/url (works on ALL Telegram versions).
     if (typeof tg.shareMessage === 'function' && tg.isVersionAtLeast('8.0')) {
-        let unlocked = false;
-        const unlock = () => { if (!unlocked) { unlocked = true; clearTimeout(timer); } };
-        const timer = setTimeout(unlock, 15000); // safety timeout
+        let resolved = false;
+        const resolve = () => { if (!resolved) { resolved = true; clearTimeout(timer); } };
+        const timer = setTimeout(() => {
+            resolve();
+            // shareMessage callback never fired — use fallback
+            shareRecipeFallback(tg, recipeId);
+        }, 6000);
 
         try {
             toast('📤 Готовлю рецепт…');
             const data = await api(`/recipes/${recipeId}/prepare-share`, 'POST');
             if (data.prepared_message_id) {
                 tg.shareMessage(data.prepared_message_id, (success) => {
-                    unlock();
+                    resolve();
                     if (success) {
                         hapticNotif('success');
                         toast('✅ Рецепт отправлен!');
+                    } else {
+                        // shareMessage returned false — use fallback
+                        shareRecipeFallback(tg, recipeId);
                     }
                 });
                 return;
             }
-            // fallback if prepared_message_id is null
-            unlock();
+            // prepared_message_id is null — use fallback
+            resolve();
+            shareRecipeFallback(tg, recipeId);
+            return;
         } catch(e) {
-            unlock();
+            resolve();
             console.error('prepare-share failed:', e);
+            shareRecipeFallback(tg, recipeId);
+            return;
         }
     }
 
-    // Fallback for old Telegram: open inline query with hint
-    toast('Напишите @reciptesbot в чате с другом и выберите рецепт');
+    // Fallback for old Telegram: open share sheet via t.me/share/url
+    shareRecipeFallback(tg, recipeId);
+}
+
+
+function shareRecipeFallback(tg, recipeId) {
+    // Universal fallback: open Telegram share sheet with recipe link.
+    // Works on ALL Telegram versions (no shareMessage needed).
+    const link = `https://t.me/${BOT || 'reciptesbot'}?startapp=shared_recipe_${recipeId}`;
+    const text = '🍲 Рецепт из ПОЛЯНЫ — открой и сохрани!';
+    if (tg?.openTelegramLink) {
+        tg.openTelegramLink(
+            `https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(text)}`
+        );
+    } else {
+        // Last resort: copy link
+        navigator.clipboard?.writeText(link).catch(() => {});
+        toast('Ссылка скопирована');
+    }
 }
 
 function showShareScreen(token) {

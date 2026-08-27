@@ -1516,6 +1516,36 @@
     </div>
 </div>
 
+<!-- ══ Editorial Recipe Screen ═══════════════════════════════════════════════ -->
+<div id="s-editorial" class="screen">
+    <div id="editorial-hero" class="rdetail-hero">
+        <span id="editorial-emoji" class="rdetail-emoji">🍽</span>
+        <div id="editorial-name" class="rdetail-name"></div>
+        <div id="editorial-desc" style="font-size:14px;color:var(--hint);margin-top:8px;padding:0 16px"></div>
+        <div id="editorial-badges" class="rdetail-badges"></div>
+    </div>
+    <div id="editorial-image-wrap" class="rdetail-photo" style="display:none">
+        <img id="editorial-image" src="" alt="">
+    </div>
+    <div id="editorial-ingredients-section">
+        <div class="rdetail-section-title">🥕 Ингредиенты</div>
+        <div id="editorial-ingredients"></div>
+    </div>
+    <div id="editorial-steps-section">
+        <div class="rdetail-section-title">👩‍🍳 Приготовление</div>
+        <div id="editorial-steps"></div>
+    </div>
+    <div id="editorial-source" style="padding:12px 14px;font-size:12px;color:var(--hint)"></div>
+    <div id="editorial-actions" style="padding:16px 14px">
+        <button id="editorial-save-btn" class="btn btn-primary" style="width:100%;margin-bottom:8px" onclick="saveEditorialRecipe()">
+            🌿 Сохранить себе
+        </button>
+        <button id="editorial-share-btn" class="btn btn-outline" style="width:100%" onclick="shareEditorialRecipe()">
+            📤 Поделиться
+        </button>
+    </div>
+</div>
+
 <!-- ══ Privacy Screen ═══════════════════════════════════════════════════════ -->
 <div id="s-privacy" class="screen">
     <div style="padding:20px">
@@ -1599,6 +1629,17 @@ const API = 'https://polyana.coiqa.ru/api';
 const BOT  = 'reciptesbot';
 const APP_VERSION = '2.1.0';
 const BUILD_DATE = '2026-07-25';
+
+// Analytics helper (fire-and-forget)
+function trackEvent(eventType, props = {}) {
+    try {
+        fetch(`${API}/analytics/track`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-Telegram-Init-Data': S.initData || '' },
+            body: JSON.stringify({ event_type: eventType, props }),
+        }).catch(() => {});
+    } catch {}
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // STATE
@@ -3659,6 +3700,168 @@ async function executeShare(token) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// EDITORIAL RECIPE
+// ═══════════════════════════════════════════════════════════════════════════
+
+let S_EDITORIAL = { recipe: null, saved: false, savedRecipeId: null };
+
+async function openEditorialRecipe(slug) {
+    showScreen('s-editorial');
+    setBackBtn(() => { haptic(); showScreen('s-home'); loadEvents(); });
+
+    // Reset state
+    S_EDITORIAL = { recipe: null, saved: false, savedRecipeId: null };
+    $('editorial-save-btn').disabled = true;
+    $('editorial-save-btn').textContent = 'Загрузка...';
+
+    try {
+        const data = await fetch(`${API}/public/recipes/${slug}`).then(r => {
+            if (!r.ok) throw new Error('Not found');
+            return r.json();
+        });
+        S_EDITORIAL.recipe = data;
+        renderEditorialRecipe(data);
+
+        // Track open
+        trackEvent('editorial_recipe_opened', {
+            editorial_recipe_id: data.id,
+            slug: slug,
+            source: new URLSearchParams(window.location.search).get('source') || 'direct',
+            campaign: new URLSearchParams(window.location.search).get('campaign') || 'organic',
+        });
+    } catch (e) {
+        console.error(e);
+        $('editorial-name').textContent = 'Рецепт не найден';
+        $('editorial-emoji').textContent = '😕';
+        $('editorial-save-btn').disabled = true;
+        $('editorial-save-btn').textContent = 'Недоступно';
+    }
+}
+
+function renderEditorialRecipe(r) {
+    $('editorial-emoji').textContent = r.emoji || '🍽';
+    $('editorial-name').textContent = r.name;
+    $('editorial-desc').textContent = r.description || '';
+    $('editorial-desc').style.display = r.description ? 'block' : 'none';
+
+    // Badges
+    const badges = [];
+    if (r.cook_time_minutes) badges.push(`⏱ ${r.cook_time_minutes} мин`);
+    if (r.servings) badges.push(`🍽 ${r.servings} порц.`);
+    if (r.category) badges.push(r.category);
+    $('editorial-badges').innerHTML = badges.map(b => `<span class="rdetail-badge">${esc(b)}</span>`).join('');
+
+    // Image
+    if (r.editorial_image_url) {
+        $('editorial-image').src = r.editorial_image_url;
+        $('editorial-image-wrap').style.display = 'block';
+    } else {
+        $('editorial-image-wrap').style.display = 'none';
+    }
+
+    // Ingredients
+    const ings = r.ingredients || [];
+    if (ings.length) {
+        $('editorial-ingredients-section').style.display = 'block';
+        $('editorial-ingredients').innerHTML = ings.map(i => {
+            let qty = '';
+            if (i.qty && i.qty !== 0) {
+                const q = i.qty === Math.floor(i.qty) ? i.qty : parseFloat(i.qty.toFixed(2));
+                qty = `${q} ${i.unit || ''}`.trim();
+            }
+            return `<div class="rdetail-ing-row">
+                <span class="rdetail-ing-name">${esc(i.name)}</span>
+                <span class="rdetail-ing-qty">${esc(qty)}</span>
+            </div>`;
+        }).join('');
+    } else {
+        $('editorial-ingredients-section').style.display = 'none';
+    }
+
+    // Steps
+    const steps = r.steps || [];
+    if (steps.length) {
+        $('editorial-steps-section').style.display = 'block';
+        $('editorial-steps').innerHTML = steps.map(s => `
+            <div class="rdetail-step-row">
+                <span class="rdetail-step-num">${s.step_number}</span>
+                <span class="rdetail-step-text">${esc(s.text)}</span>
+            </div>
+        `).join('');
+    } else {
+        $('editorial-steps-section').style.display = 'none';
+    }
+
+    // Source
+    const src = r.source || {};
+    const srcParts = [];
+    if (src.platform) srcParts.push(src.platform);
+    if (src.author) srcParts.push(src.author);
+    $('editorial-source').textContent = srcParts.length ? `Источник: ${srcParts.join(' · ')}` : '';
+
+    // Enable save button
+    $('editorial-save-btn').disabled = false;
+    $('editorial-save-btn').textContent = '🌿 Сохранить себе';
+}
+
+async function saveEditorialRecipe() {
+    if (!S_EDITORIAL.recipe || S_EDITORIAL.saved) return;
+
+    const btn = $('editorial-save-btn');
+    btn.disabled = true;
+    btn.textContent = 'Сохраняю...';
+    haptic();
+
+    try {
+        const data = await api(`/editorial/recipes/${S_EDITORIAL.recipe.id}/save`, 'POST');
+        S_EDITORIAL.saved = true;
+        S_EDITORIAL.savedRecipeId = data.recipe_id;
+
+        hapticNotif('success');
+
+        if (data.already_saved) {
+            btn.textContent = '✅ Уже сохранено';
+            toast('Рецепт уже в вашей библиотеке');
+        } else {
+            btn.textContent = '✅ Сохранено';
+            toast('Рецепт сохранён в библиотеку!');
+        }
+
+        // Replace share button with "Open in library"
+        $('editorial-share-btn').textContent = '📖 Открыть в моей библиотеке';
+        $('editorial-share-btn').onclick = () => {
+            haptic();
+            // Navigate to recipe detail
+            showScreen('s-rdetail');
+            loadRecipeDetail(data.recipe_id);
+        };
+    } catch (e) {
+        console.error(e);
+        btn.disabled = false;
+        btn.textContent = '🌿 Сохранить себе';
+        toast('Ошибка сохранения');
+    }
+}
+
+function shareEditorialRecipe() {
+    if (!S_EDITORIAL.recipe) return;
+    haptic();
+
+    const r = S_EDITORIAL.recipe;
+    const slug = r.content_slug;
+    const url = `${window.location.origin}${window.location.pathname}?screen=editorial_recipe&slug=${slug}`;
+    const text = `${r.name} — рецепт из ПОЛЯНЫ`;
+
+    const tg = window.Telegram?.WebApp;
+    if (tg && tg.openTelegramLink) {
+        tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(text)}`);
+    } else {
+        navigator.clipboard?.writeText(url);
+        toast('Ссылка скопирована');
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // LIBRARY PICKER (add recipe from library to event)
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -4263,6 +4466,15 @@ document.addEventListener('DOMContentLoaded', async () => {
             showScreen('s-home');
             // Show share screen inline
             showShareScreen(token);
+        }
+        // Deep link: editorial recipe
+        else if (startParam && startParam.startsWith('editorial_')) {
+            const slug = startParam.replace('editorial_', '');
+            openEditorialRecipe(slug);
+        }
+        // Also handle ?screen=editorial_recipe&slug=...
+        else if (params.get('screen') === 'editorial_recipe' && params.get('slug')) {
+            openEditorialRecipe(params.get('slug'));
         }
         // Deep link: open specific event
         else if (startParam && startParam.startsWith('event_')) {

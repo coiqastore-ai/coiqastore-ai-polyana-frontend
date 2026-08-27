@@ -1631,11 +1631,21 @@ const APP_VERSION = '2.1.0';
 const BUILD_DATE = '2026-07-25';
 
 // Analytics helper (fire-and-forget)
+// Public events (no auth): editorial_recipe_opened
+// Authenticated events (require initData): all others
+const _PUBLIC_EVENTS = new Set(['editorial_recipe_opened']);
+
 function trackEvent(eventType, props = {}) {
     try {
-        fetch(`${API}/analytics/track`, {
+        const isPublic = _PUBLIC_EVENTS.has(eventType);
+        const endpoint = isPublic ? '/analytics/track' : '/analytics/track-auth';
+        const headers = { 'Content-Type': 'application/json' };
+        if (!isPublic && S.initData) {
+            headers['X-Telegram-Init-Data'] = S.initData;
+        }
+        fetch(`${API}${endpoint}`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-Telegram-Init-Data': S.initData || '' },
+            headers,
             body: JSON.stringify({ event_type: eventType, props }),
         }).catch(() => {});
     } catch {}

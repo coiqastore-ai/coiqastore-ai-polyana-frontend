@@ -3654,6 +3654,11 @@ function openRdetailMenu() {
     haptic();
     const items = [];
     items.push({icon:'✏️', label:'Редактировать рецепт', fn:`closeSheet();openRecipeEdit()`});
+    // Offer auto-recognition only if some ingredient has no quantity
+    const needsQty = (r.ingredients || []).some(i => i.qty == null || i.qty === '');
+    if ((r.ingredients || []).length > 0 && needsQty) {
+        items.push({icon:'✨', label:'Распознать количества', fn:`closeSheet();normalizeRecipeIngredients()`});
+    }
     // Nutrition calculation
     if (r.nutrition) {
         items.push({icon:'🔄', label:'Пересчитать КБЖУ — 1 балл', fn:`closeSheet();recalculateNutrition()`});
@@ -3699,6 +3704,21 @@ async function calculateNutrition() {
 
 async function recalculateNutrition() {
     await calculateNutrition();
+}
+
+async function normalizeRecipeIngredients() {
+    const r = RDETAIL.recipe;
+    if (!r) return;
+    haptic();
+    toast('✨ Распознаю количества…');
+    try {
+        await api(`/recipes/${r.id}/normalize-ingredients`, 'POST');
+        await openRecipeDetail(r.id, RDETAIL.from);
+        hapticNotif('success');
+    } catch(e) {
+        hapticNotif('error');
+        toast('Не удалось распознать количества');
+    }
 }
 
 let recipeShareInProgress = false;
@@ -4841,11 +4861,6 @@ function closeEditorial() {
     } else {
         showScreen('s-auth');
     }
-}
-
-function esc(s) {
-    if (!s) return '';
-    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
 </script>

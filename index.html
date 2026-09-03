@@ -1334,7 +1334,7 @@
     </div>
     <div id="rdetail-share-bar" class="rdetail-share-bar">
         <button class="btn-share" id="rdetail-share-btn"
-                onclick="shareRecipe(RDETAIL.recipe?.id)"
+                onclick="shareCurrentRecipe()"
                 aria-label="Поделиться рецептом">
             📤 Поделиться рецептом
         </button>
@@ -3450,6 +3450,8 @@ const RDETAIL = { recipe: null, from: null };
 // from: 'library' | 'event' | 'picker'
 async function openRecipeDetail(recipeId, from) {
     haptic();
+    clearShareAttempt();
+    recipeShareInProgress = false;
     RDETAIL.from = from;
     RDETAIL.recipe = null;
 
@@ -3481,6 +3483,8 @@ async function openRecipeDetail(recipeId, from) {
 }
 
 function closeRdetail() {
+    clearShareAttempt();
+    recipeShareInProgress = false;
     // Hide share bar
     const bar = $('rdetail-share-bar');
     if (bar) bar.classList.remove('visible');
@@ -3722,6 +3726,25 @@ async function normalizeRecipeIngredients() {
 }
 
 let recipeShareInProgress = false;
+let recipeShareAttempt = null;
+
+function shareCurrentRecipe() {
+    const attempt = recipeShareAttempt;
+    if (attempt && attempt.fallbackOffered && !attempt.settled) {
+        attempt.settled = true;
+        clearTimeout(attempt.timer);
+        const tg = window.Telegram?.WebApp;
+        if (tg && attempt.miniAppUrl) {
+            openShareFallback(tg, attempt.miniAppUrl);
+        }
+        recipeShareAttempt = null;
+        recipeShareInProgress = false;
+        resetShareBtn();
+        return;
+    }
+    const recipeId = RDETAIL.recipe?.id;
+    if (recipeId) shareRecipe(recipeId);
+}
 
 async function shareRecipe(recipeId) {
     if (!recipeId || recipeShareInProgress) return;
@@ -3733,6 +3756,8 @@ async function shareRecipe(recipeId) {
     }
 
     recipeShareInProgress = true;
+    clearShareAttempt();
+
     const btn = $('rdetail-share-btn');
     if (btn) {
         btn.disabled = true;
@@ -3742,59 +3767,88 @@ async function shareRecipe(recipeId) {
 
     let data;
     try {
-        data = await api(`/recipes/${recipeId}/prepare-share`, 'POST');
+        const apiPromise = api(`/recipes/${recipeId}/prepare-share`, 'POST');
+        const timeoutPromise = new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('api-timeout')), 12000)
+        );
+        data = await Promise.race([apiPromise, timeoutPromise]);
     } catch (e) {
-        console.error('prepare-share failed');
-        toast('Не удалось подготовить рецепт');
-        resetShareBtn();
+        if (recipeShareInProgress) {
+            toast('Не удалось подготовить рецепт. Попробуйте ещё раз');
+            recipeShareInProgress = false;
+            resetShareBtn();
+        }
         return;
     }
 
     if (!data || !data.mini_app_url) {
-        toast('Не удалось подготовить рецепт');
+        toast('Не удалось подготовить рецепт. Попробуйте ещё раз');
+        recipeShareInProgress = false;
         resetShareBtn();
         return;
     }
 
-    // Primary: shareMessage (modern Telegram)
     const canUseShareMessage =
         typeof tg.shareMessage === 'function' &&
         !(typeof tg.isVersionAtLeast === 'function' && !tg.isVersionAtLeast('8.0'));
 
     if (canUseShareMessage && data.prepared_message_id) {
-        let settled = false;
+        const attempt = {
+            miniAppUrl: data.mini_app_url,
+            timer: 0,
+            fallbackOffered: false,
+            settled: false,
+        };
+        recipeShareAttempt = attempt;
 
-        const safetyTimeout = setTimeout(() => {
-            if (settled) return;
-            settled = true;
-            // Only unlock button — do NOT open fallback
-            resetShareBtn();
-        }, 60000);
+        attempt.timer = setTimeout(() => {
+            if (attempt.settled) return;
+            attempt.fallbackOffered = true;
+            const b = $('rdetail-share-btn');
+            if (b) {
+                b.disabled = false;
+                b.removeAttribute('aria-busy');
+                b.textContent = '📨 Не открылось? Отправить ссылкой';
+            }
+            toast('Если окно не открылось, отправьте ссылкой');
+        }, 3000);
 
         try {
             tg.shareMessage(data.prepared_message_id, (success) => {
-                if (settled) return;
-                settled = true;
-                clearTimeout(safetyTimeout);
+                if (attempt.settled) return;
+                attempt.settled = true;
+                clearTimeout(attempt.timer);
 
                 if (success) {
                     hapticNotif('success');
                     toast('✅ Рецепт отправлен!');
+                } else {
+                    attempt.fallbackOffered = true;
+                    const b = $('rdetail-share-btn');
+                    if (b) {
+                        b.disabled = false;
+                        b.removeAttribute('aria-busy');
+                        b.textContent = '📨 Не открылось? Отправить ссылкой';
+                    }
                 }
-                // success === false → user cancelled picker, no false success
-                resetShareBtn();
+                if (success) {
+                    recipeShareAttempt = null;
+                    recipeShareInProgress = false;
+                    resetShareBtn();
+                }
             });
         } catch (e) {
-            // shareMessage threw synchronously — fall through to fallback
-            if (settled) return;
-            settled = true;
-            clearTimeout(safetyTimeout);
+            if (attempt.settled) return;
+            attempt.settled = true;
+            clearTimeout(attempt.timer);
+            recipeShareAttempt = null;
+            recipeShareInProgress = false;
             openShareFallback(tg, data.mini_app_url);
         }
         return;
     }
 
-    // Fallback: t.me/share/url with mini_app_url
+    recipeShareInProgress = false;
     openShareFallback(tg, data.mini_app_url);
 }
 
@@ -3812,7 +3866,6 @@ function openShareFallback(tg, miniAppUrl) {
         }
     }
 
-    // Last resort: clipboard
     try {
         navigator.clipboard.writeText(miniAppUrl).then(() => {
             toast('Ссылка скопирована. Вставьте её в чат.');
@@ -3823,6 +3876,14 @@ function openShareFallback(tg, miniAppUrl) {
         toast('Не удалось поделиться рецептом');
     }
     resetShareBtn();
+}
+
+function clearShareAttempt() {
+    if (recipeShareAttempt) {
+        clearTimeout(recipeShareAttempt.timer);
+        recipeShareAttempt.settled = true;
+        recipeShareAttempt = null;
+    }
 }
 
 function resetShareBtn() {

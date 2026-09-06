@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>🌿 ПОЛЯНА</title>
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script src="https://telegram.org/js/telegram-web-app.js?63"></script>
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
     <style>
     /* ── Variables ─────────────────────────────────────────────────────────── */
@@ -1337,17 +1337,17 @@
     </div>
     <div id="rdetail-share-bar" class="rdetail-share-bar">
         <button class="btn-share" id="rdetail-share-btn" type="button"
+                disabled
                 onclick="shareCurrentRecipe()"
                 aria-label="Поделиться рецептом">
-            📤 Поделиться рецептом
+            📤 Готовим кнопку…
         </button>
-        <a class="btn-share" id="rdetail-share-fallback"
-           href="#" target="_blank" rel="noopener"
-           onclick="return openRecipeShareFallback(event)"
-           style="display:none;margin-top:8px"
-           aria-label="Отправить рецепт ссылкой">
-            🔗 Отправить ссылкой
-        </a>
+        <button class="btn-share" id="rdetail-share-fallback" type="button"
+                onclick="shareRecipeFallback()"
+                style="display:none;margin-top:8px"
+                aria-label="Выбрать чат другим способом">
+            Выбрать чат другим способом
+        </button>
     </div>
 </div>
 
@@ -3482,6 +3482,7 @@ async function openRecipeDetail(recipeId, from) {
         RDETAIL.recipe = r;
         $('rdetail-title').textContent = r.name;
         renderRdetail(r);
+        void primeRecipeShare(r.id);
     } catch(e) {
         $('rdetail-body').innerHTML = `
             <div style="padding:40px;text-align:center;color:var(--hint);font-size:14px">
@@ -3733,198 +3734,206 @@ async function normalizeRecipeIngredients() {
     }
 }
 
-const POLYANA_APP_SHORT_NAME = 'polyana';
-const RECIPE_SHARE_API_TIMEOUT_MS = 12000;
-const RECIPE_SHARE_EVENT_TIMEOUT_MS = 15000;
-let recipeShareAttempt = null;
-let recipeShareSequence = 0;
+const RECIPE_SHARE_EVENT_TIMEOUT_MS = 8000;
+const RECIPE_SHARE = {
+    recipeId: null,
+    data: null,
+    loading: null,
+    generation: 0,
+    active: false,
+    eventTimer: 0,
+    onSent: null,
+    onFailed: null,
+};
 
-function buildRecipeFallbackUrl(recipeId, recipeName, miniAppUrl) {
-    const target = miniAppUrl
-        || `https://t.me/${BOT || 'reciptesbot'}?start=save_recipe_${recipeId}`;
-    const text = `🌿 ${recipeName || 'Рецепт'}\nРецепт из ПОЛЯНЫ`;
-    return 'https://t.me/share/url?url=' + encodeURIComponent(target)
-        + '&text=' + encodeURIComponent(text);
+function recipeShareTelegram() {
+    return S.tg || window.Telegram?.WebApp;
 }
 
-function setRecipeShareIdle() {
+function setRecipeShareButton(label, disabled) {
     const btn = $('rdetail-share-btn');
-    if (btn) {
-        btn.disabled = false;
-        btn.removeAttribute('aria-busy');
-        btn.textContent = '📤 Поделиться рецептом';
-    }
+    if (!btn) return;
+    btn.disabled = Boolean(disabled);
+    btn.textContent = label;
+    if (disabled) btn.setAttribute('aria-busy', 'true');
+    else btn.removeAttribute('aria-busy');
 }
 
 function hideRecipeShareFallback() {
     const fallback = $('rdetail-share-fallback');
-    if (!fallback) return;
-    fallback.style.display = 'none';
-    fallback.removeAttribute('href');
+    if (fallback) fallback.style.display = 'none';
 }
 
-function showRecipeShareFallback(attempt, message) {
-    if (!attempt || attempt.cancelled || recipeShareAttempt !== attempt) return;
+function showRecipeShareFallback(message) {
     const fallback = $('rdetail-share-fallback');
-    if (fallback) {
-        fallback.href = buildRecipeFallbackUrl(
-            attempt.recipeId,
-            attempt.recipeName,
-            attempt.miniAppUrl
-        );
-        fallback.style.display = 'flex';
-    }
-    setRecipeShareIdle();
-    if (message) toast(message);
+    if (fallback) fallback.style.display = 'flex';
+    if (message) toast(message, null, 5000);
 }
 
-function openRecipeShareFallback(event) {
-    const fallback = $('rdetail-share-fallback');
-    const url = fallback?.href;
-    if (!url) return false;
-    const tg = S.tg || window.Telegram?.WebApp;
-    if (tg && typeof tg.openTelegramLink === 'function') {
-        if (event && typeof event.preventDefault === 'function') event.preventDefault();
-        tg.openTelegramLink(url);
-        return false;
+function detachRecipeShareEvents() {
+    const tg = recipeShareTelegram();
+    if (tg && typeof tg.offEvent === 'function') {
+        if (RECIPE_SHARE.onSent) tg.offEvent('shareMessageSent', RECIPE_SHARE.onSent);
+        if (RECIPE_SHARE.onFailed) tg.offEvent('shareMessageFailed', RECIPE_SHARE.onFailed);
     }
-    return true;
-}
-
-function detachRecipeShareEvents(attempt) {
-    if (!attempt || !attempt.tg || typeof attempt.tg.offEvent !== 'function') return;
-    if (attempt.onSent) attempt.tg.offEvent('shareMessageSent', attempt.onSent);
-    if (attempt.onFailed) attempt.tg.offEvent('shareMessageFailed', attempt.onFailed);
+    RECIPE_SHARE.onSent = null;
+    RECIPE_SHARE.onFailed = null;
+    if (RECIPE_SHARE.eventTimer) clearTimeout(RECIPE_SHARE.eventTimer);
+    RECIPE_SHARE.eventTimer = 0;
 }
 
 function cancelRecipeShareAttempt() {
-    const attempt = recipeShareAttempt;
-    if (attempt) {
-        attempt.cancelled = true;
-        if (attempt.apiTimer) clearTimeout(attempt.apiTimer);
-        if (attempt.eventTimer) clearTimeout(attempt.eventTimer);
-        detachRecipeShareEvents(attempt);
-    }
-    recipeShareAttempt = null;
-    setRecipeShareIdle();
+    RECIPE_SHARE.generation += 1;
+    detachRecipeShareEvents();
+    RECIPE_SHARE.recipeId = null;
+    RECIPE_SHARE.data = null;
+    RECIPE_SHARE.loading = null;
+    RECIPE_SHARE.active = false;
     hideRecipeShareFallback();
+    setRecipeShareButton('📤 Готовим кнопку…', true);
 }
 
-function finishRecipeShareAttempt(attempt) {
-    if (!attempt || attempt.cancelled || recipeShareAttempt !== attempt) return false;
-    if (attempt.apiTimer) clearTimeout(attempt.apiTimer);
-    if (attempt.eventTimer) clearTimeout(attempt.eventTimer);
-    detachRecipeShareEvents(attempt);
-    recipeShareAttempt = null;
-    setRecipeShareIdle();
-    return true;
+function preparedRecipeShareIsFresh(data) {
+    if (!data?.prepared_message_id) return false;
+    if (!data.expiration_date) return true;
+    return Number(data.expiration_date) > Math.floor(Date.now() / 1000) + 15;
 }
 
-async function shareCurrentRecipe() {
+async function primeRecipeShare(recipeId, force=false) {
+    if (!force && RECIPE_SHARE.recipeId === recipeId && preparedRecipeShareIsFresh(RECIPE_SHARE.data)) {
+        setRecipeShareButton('📤 Поделиться рецептом', false);
+        return RECIPE_SHARE.data;
+    }
+    if (!force && RECIPE_SHARE.recipeId === recipeId && RECIPE_SHARE.loading) {
+        return RECIPE_SHARE.loading;
+    }
+
+    const generation = ++RECIPE_SHARE.generation;
+    RECIPE_SHARE.recipeId = recipeId;
+    RECIPE_SHARE.data = null;
+    hideRecipeShareFallback();
+    setRecipeShareButton('📤 Готовим кнопку…', true);
+
+    const request = api(`/recipes/${recipeId}/prepare-share`, 'POST');
+    RECIPE_SHARE.loading = request;
+    try {
+        const data = await request;
+        if (generation !== RECIPE_SHARE.generation || RDETAIL.recipe?.id !== recipeId) return null;
+        RECIPE_SHARE.data = data || null;
+        const tg = recipeShareTelegram();
+        const supported = tg
+            && typeof tg.shareMessage === 'function'
+            && (typeof tg.isVersionAtLeast !== 'function' || tg.isVersionAtLeast('8.0'));
+        if (preparedRecipeShareIsFresh(data) && supported) {
+            hideRecipeShareFallback();
+            setRecipeShareButton('📤 Поделиться рецептом', false);
+        } else if (data?.token) {
+            setRecipeShareButton('📤 Поделиться рецептом', true);
+            showRecipeShareFallback('Доступен другой способ отправки');
+        } else {
+            setRecipeShareButton('Повторить подготовку', false);
+        }
+        return data;
+    } catch (error) {
+        if (generation === RECIPE_SHARE.generation && RDETAIL.recipe?.id === recipeId) {
+            setRecipeShareButton('Повторить подготовку', false);
+        }
+        return null;
+    } finally {
+        if (generation === RECIPE_SHARE.generation) RECIPE_SHARE.loading = null;
+    }
+}
+
+function recipeShareErrorCode(error) {
+    if (typeof error === 'string') return error;
+    return error?.error || error?.error_type || error?.message || '';
+}
+
+function finishRecipeShareAttempt() {
+    detachRecipeShareEvents();
+    RECIPE_SHARE.active = false;
+    setRecipeShareButton(
+        preparedRecipeShareIsFresh(RECIPE_SHARE.data) ? '📤 Поделиться рецептом' : 'Повторить подготовку',
+        false,
+    );
+}
+
+// Intentionally synchronous: the Telegram bridge runs in the original tap.
+function shareCurrentRecipe() {
     const recipe = RDETAIL.recipe;
-    if (!recipe || recipeShareAttempt) return;
+    const tg = recipeShareTelegram();
+    if (!recipe || !tg || RECIPE_SHARE.active) return;
 
-    hideRecipeShareFallback();
-    const tg = S.tg || window.Telegram?.WebApp;
-    const attempt = {
-        id: ++recipeShareSequence,
-        recipeId: recipe.id,
-        recipeName: recipe.name || 'Рецепт',
-        miniAppUrl: null,
-        tg,
-        apiTimer: 0,
-        eventTimer: 0,
-        onSent: null,
-        onFailed: null,
-        cancelled: false,
-    };
-    recipeShareAttempt = attempt;
-
-    const btn = $('rdetail-share-btn');
-    if (btn) {
-        btn.disabled = true;
-        btn.setAttribute('aria-busy', 'true');
-        btn.textContent = 'Готовлю рецепт…';
-    }
-
-    const supported = tg
-        && typeof tg.shareMessage === 'function'
-        && (typeof tg.isVersionAtLeast !== 'function' || tg.isVersionAtLeast('8.0'));
-
-    if (!supported) {
-        showRecipeShareFallback(attempt, 'Обновите Telegram или отправьте рецепт ссылкой');
-        recipeShareAttempt = null;
+    const data = RECIPE_SHARE.recipeId === recipe.id ? RECIPE_SHARE.data : null;
+    if (!preparedRecipeShareIsFresh(data)) {
+        toast('Готовлю кнопку — нажмите ещё раз через секунду');
+        void primeRecipeShare(recipe.id, true);
         return;
     }
 
+    const supported = typeof tg.shareMessage === 'function'
+        && (typeof tg.isVersionAtLeast !== 'function' || tg.isVersionAtLeast('8.0'));
+    if (!supported) {
+        showRecipeShareFallback('Эта версия Telegram не поддерживает быструю отправку');
+        return;
+    }
+
+    RECIPE_SHARE.active = true;
+    hideToast();
+    hideRecipeShareFallback();
+    setRecipeShareButton('Выберите чат в Telegram…', true);
+
+    RECIPE_SHARE.onSent = () => {
+        finishRecipeShareAttempt();
+        RECIPE_SHARE.data = null;
+        hapticNotif('success');
+        toast('✅ Рецепт отправлен!');
+        void primeRecipeShare(recipe.id, true);
+    };
+    RECIPE_SHARE.onFailed = event => {
+        const error = recipeShareErrorCode(event);
+        finishRecipeShareAttempt();
+        if (error === 'USER_DECLINED') return;
+        if (error === 'MESSAGE_EXPIRED') {
+            RECIPE_SHARE.data = null;
+            void primeRecipeShare(recipe.id, true);
+        }
+        showRecipeShareFallback('Telegram не открыл отправку. Попробуйте другой способ.');
+    };
+
+    if (typeof tg.onEvent === 'function') {
+        tg.onEvent('shareMessageSent', RECIPE_SHARE.onSent);
+        tg.onEvent('shareMessageFailed', RECIPE_SHARE.onFailed);
+    }
+
     try {
-        const timeout = new Promise((_, reject) => {
-            attempt.apiTimer = setTimeout(
-                () => reject(new Error('prepare-share-timeout')),
-                RECIPE_SHARE_API_TIMEOUT_MS
-            );
-        });
-        const data = await Promise.race([
-            api(`/recipes/${recipe.id}/prepare-share`, 'POST'),
-            timeout,
-        ]);
-
-        if (attempt.cancelled || recipeShareAttempt !== attempt) return;
-        clearTimeout(attempt.apiTimer);
-        attempt.apiTimer = 0;
-
-        if (data?.mini_app_url) {
-            attempt.miniAppUrl = data.mini_app_url;
-        } else if (data?.token) {
-            attempt.miniAppUrl = `https://t.me/${BOT || 'reciptesbot'}/${POLYANA_APP_SHORT_NAME}`
-                + `?startapp=${encodeURIComponent('shared_' + data.token)}`;
-        }
-
-        if (!data?.prepared_message_id) {
-            showRecipeShareFallback(attempt, 'Не удалось подготовить сообщение');
-            recipeShareAttempt = null;
-            return;
-        }
-
-        attempt.onSent = () => {
-            if (!finishRecipeShareAttempt(attempt)) return;
-            hapticNotif('success');
-            toast('✅ Рецепт отправлен!');
-        };
-        attempt.onFailed = event => {
-            if (attempt.cancelled || recipeShareAttempt !== attempt) return;
-            const error = typeof event === 'string'
-                ? event
-                : (event?.error || 'UNKNOWN_ERROR');
-            if (error === 'USER_DECLINED') {
-                finishRecipeShareAttempt(attempt);
-                return;
-            }
-            showRecipeShareFallback(attempt, 'Telegram не смог отправить сообщение');
-            finishRecipeShareAttempt(attempt);
-        };
-
-        if (typeof tg.onEvent === 'function') {
-            tg.onEvent('shareMessageSent', attempt.onSent);
-            tg.onEvent('shareMessageFailed', attempt.onFailed);
-        }
-
-        attempt.eventTimer = setTimeout(() => {
-            if (attempt.cancelled || recipeShareAttempt !== attempt) return;
-            showRecipeShareFallback(
-                attempt,
-                'Telegram не открыл выбор получателя — отправьте рецепт ссылкой'
-            );
-            detachRecipeShareEvents(attempt);
-            recipeShareAttempt = null;
-        }, RECIPE_SHARE_EVENT_TIMEOUT_MS);
-
         tg.shareMessage(data.prepared_message_id);
     } catch (error) {
-        if (attempt.cancelled || recipeShareAttempt !== attempt) return;
-        console.error('recipe share failed:', error);
-        showRecipeShareFallback(attempt, 'Не удалось открыть отправку');
-        finishRecipeShareAttempt(attempt);
+        finishRecipeShareAttempt();
+        const bridgeBusy = recipeShareErrorCode(error).includes('WebAppShareMessageOpened');
+        if (bridgeBusy) setRecipeShareButton('📤 Поделиться рецептом', true);
+        showRecipeShareFallback('Telegram не открыл отправку. Попробуйте другой способ.');
+        return;
+    }
+
+    RECIPE_SHARE.eventTimer = setTimeout(() => {
+        if (!RECIPE_SHARE.active) return;
+        showRecipeShareFallback('Окно не открылось? Нажмите другой способ.');
+    }, RECIPE_SHARE_EVENT_TIMEOUT_MS);
+}
+
+function shareRecipeFallback() {
+    const recipe = RDETAIL.recipe;
+    const tg = recipeShareTelegram();
+    const data = recipe && RECIPE_SHARE.recipeId === recipe.id ? RECIPE_SHARE.data : null;
+    if (!tg || !data?.token || typeof tg.switchInlineQuery !== 'function') {
+        toast('Другой способ сейчас недоступен');
+        return;
+    }
+    try {
+        tg.switchInlineQuery('share:' + data.token, ['users', 'groups', 'channels']);
+    } catch (error) {
+        toast('Не удалось открыть выбор чата');
     }
 }
 

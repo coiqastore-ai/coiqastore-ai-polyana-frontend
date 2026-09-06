@@ -1,5 +1,5 @@
 /**
- * Share tests execute the real Recipe Detail implementation from index.html.
+ * Behavioral tests for the exact Recipe Detail share code in index.html.
  * Run: node test_share.js
  */
 
@@ -12,303 +12,308 @@ let failed = 0;
 const results = [];
 
 function assert(name, condition, detail = '') {
-    results.push({ name, status: condition ? 'PASS' : 'FAIL', detail });
+    results.push({ name, condition: Boolean(condition), detail });
     condition ? passed++ : failed++;
 }
 
 const html = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
-const scripts = [...html.matchAll(/<script[^>]*>([\s\S]*?)<\/script>/gi)]
-    .map(match => match[1])
-    .join('\n');
-const blockMatch = scripts.match(
-    /(const POLYANA_APP_SHORT_NAME = 'polyana';[\s\S]*?)(?=function showShareScreen\()/
+const inlineScripts = [...html.matchAll(/<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/gi)]
+    .map(match => match[1]);
+const scripts = inlineScripts.join('\n');
+const shareMatch = scripts.match(
+    /(const RECIPE_SHARE_EVENT_TIMEOUT_MS = 8000;[\s\S]*?)(?=function showShareScreen\()/
 );
-const shareBlock = blockMatch ? blockMatch[1].trim() : '';
-const primaryBlock = shareBlock.match(/async function shareCurrentRecipe\(\)[\s\S]*$/)?.[0] || '';
+const shareBlock = shareMatch ? shareMatch[1].trim() : '';
+const shareFunction = shareBlock.match(
+    /function shareCurrentRecipe\(\) \{[\s\S]*?\n\}(?=\n\nfunction shareRecipeFallback)/
+)?.[0] || '';
+const executableShareFunction = shareFunction.replace(/\/\/.*$/gm, '');
 
 function mockElement() {
     return {
         disabled: false,
         textContent: '',
-        style: {},
-        href: undefined,
+        style: { display: 'none' },
         attrs: {},
-        classes: new Set(),
         setAttribute(name, value) { this.attrs[name] = value; },
         removeAttribute(name) { delete this.attrs[name]; },
-        classList: {
-            owner: null,
-            add(name) { this.owner.classes.add(name); },
-            remove(name) { this.owner.classes.delete(name); },
-            contains(name) { return this.owner.classes.has(name); },
-        },
+        classList: { add() {}, remove() {} },
     };
 }
 
 function createSandbox(options = {}) {
-    const elements = {};
+    const elements = new Map();
     const getElement = id => {
-        if (!elements[id]) {
-            elements[id] = mockElement();
-            elements[id].classList.owner = elements[id];
-        }
-        return elements[id];
+        if (!elements.has(id)) elements.set(id, mockElement());
+        return elements.get(id);
     };
+    getElement('rdetail-share-btn').disabled = true;
 
     const state = {
         apiCalls: [],
         shareCalls: [],
-        openLinks: [],
+        switchCalls: [],
         toasts: [],
         haptics: [],
         handlers: new Map(),
         timers: new Map(),
-        nextTimerId: 1,
+        nextTimer: 1,
+        callOrder: [],
     };
 
     const tg = {
         isVersionAtLeast: () => options.supported !== false,
-        onEvent(name, callback) { state.handlers.set(name, callback); },
+        onEvent(name, callback) {
+            state.handlers.set(name, callback);
+        },
         offEvent(name, callback) {
             if (state.handlers.get(name) === callback) state.handlers.delete(name);
         },
         shareMessage(id) {
+            state.callOrder.push('shareMessage');
             state.shareCalls.push(id);
-            if (options.shareThrows) throw new Error('bridge failed');
+            if (options.shareThrows) throw new Error(options.shareThrows);
         },
-        openTelegramLink(url) { state.openLinks.push(url); },
+        switchInlineQuery(query, chatTypes) {
+            state.switchCalls.push({ query, chatTypes });
+            if (options.switchThrows) throw new Error('switch failed');
+        },
     };
+    if (options.noShareMethod) delete tg.shareMessage;
+    if (options.noSwitchMethod) delete tg.switchInlineQuery;
 
-    const apiResponse = options.apiResponse || {
-        prepared_message_id: 'prepared-123',
-        token: 'token-123',
-        mini_app_url: 'https://t.me/reciptesbot/polyana?startapp=shared_token-123',
+    const defaultResponse = {
+        prepared_message_id: 'prepared-42',
+        expiration_date: Math.floor(Date.now() / 1000) + 3600,
+        token: 'token-42',
+        mini_app_url: 'https://t.me/reciptesbot/polyana?startapp=shared_token-42',
     };
     const api = options.api || ((url, method) => {
+        state.callOrder.push('api');
         state.apiCalls.push({ url, method });
         if (options.apiRejects) return Promise.reject(new Error('api failed'));
-        return Promise.resolve(apiResponse);
+        return Promise.resolve(options.apiResponse || defaultResponse);
     });
 
-    const setTimeoutMock = (callback, ms) => {
-        const id = state.nextTimerId++;
-        state.timers.set(id, { callback, ms });
-        return id;
-    };
-    const clearTimeoutMock = id => state.timers.delete(id);
     const context = {
         window: { Telegram: { WebApp: tg } },
         S: { tg },
-        RDETAIL: { recipe: { id: 42, name: 'Тестовый суп' }, from: 'library' },
-        BOT: 'reciptesbot',
+        RDETAIL: { recipe: { id: 42, name: 'Тестовый рецепт' }, from: 'library' },
         api,
         $: getElement,
-        toast: message => state.toasts.push(message),
-        hapticNotif: type => state.haptics.push(type),
-        setTimeout: setTimeoutMock,
-        clearTimeout: clearTimeoutMock,
-        encodeURIComponent,
-        console: { log: console.log, error() {}, warn() {} },
+        toast(message) { state.toasts.push(message); },
+        hideToast() { state.callOrder.push('hideToast'); },
+        hapticNotif(type) { state.haptics.push(type); },
+        setTimeout(callback, ms) {
+            const id = state.nextTimer++;
+            state.timers.set(id, { callback, ms });
+            return id;
+        },
+        clearTimeout(id) { state.timers.delete(id); },
+        Date,
+        console: { log() {}, warn() {}, error() {} },
     };
     vm.createContext(context);
-    vm.runInContext(shareBlock, context);
-    return { context, state, elements, getElement, tg };
+    vm.runInContext(`${shareBlock}\n;globalThis.__shareState = RECIPE_SHARE;`, context);
+    return { context, state, tg, getElement };
 }
 
 function runStaticChecks() {
-    assert('Share block extracted', shareBlock.length > 100);
-    assert('Real shareCurrentRecipe extracted', shareBlock.includes('async function shareCurrentRecipe'));
-    assert('Primary flow uses shareMessage', shareBlock.includes('tg.shareMessage(data.prepared_message_id)'));
-    assert('Sent event is handled', shareBlock.includes("shareMessageSent"));
-    assert('Failed event is handled', shareBlock.includes("shareMessageFailed"));
-    assert('Primary flow does not call openTelegramLink', !primaryBlock.includes('openTelegramLink'));
-    assert('Fallback uses openTelegramLink on a direct tap', shareBlock.includes('tg.openTelegramLink(url)'));
-    assert('Registered short name is polyana', shareBlock.includes("POLYANA_APP_SHORT_NAME = 'polyana'"));
-
-    try {
-        new Function(scripts);
-        assert('All inline JavaScript parses', true);
-    } catch (error) {
-        assert('All inline JavaScript parses', false, error.message);
-    }
-
-    assert(
-        'Visible Recipe Detail action is a button',
-        html.includes('<button class="btn-share" id="rdetail-share-btn"')
-    );
-    assert(
-        'Manual fallback is a separate link',
-        html.includes('<a class="btn-share" id="rdetail-share-fallback"')
-    );
-    assert('Share button is not a prefetched href', !html.includes('<a class="btn-share" id="rdetail-share-btn"'));
-    assert('Prefetch implementation removed', !shareBlock.includes('prefetchShareLink'));
-    assert('Disabled button CSS exists', html.includes('.rdetail-share-bar .btn-share:disabled'));
-
-    const menu = scripts.match(/function openRdetailMenu\(\)[\s\S]*?openSheet\(/)?.[0] || '';
+    assert('Exact production Share block extracted', shareBlock.length > 1000);
+    assert('Primary handler is deliberately synchronous', shareFunction.startsWith('function shareCurrentRecipe('));
+    assert('Primary handler contains no await', !/\bawait\b/.test(executableShareFunction));
+    assert('Primary handler contains no API request', !/\bapi\s*\(/.test(executableShareFunction));
+    assert('Primary handler calls native shareMessage', shareFunction.includes('tg.shareMessage(data.prepared_message_id)'));
+    assert('Primary handler passes no callback', !/shareMessage\([^\n]+,/.test(shareFunction));
+    assert('Primary handler handles sent event', shareFunction.includes("shareMessageSent"));
+    assert('Primary handler handles failed event', shareFunction.includes("shareMessageFailed"));
+    assert('Primary handler never auto-opens inline fallback', !shareFunction.includes('switchInlineQuery'));
+    assert('Manual fallback owns switchInlineQuery', /function shareRecipeFallback[\s\S]*switchInlineQuery/.test(shareBlock));
+    assert('Recipe open primes Share after render', /renderRdetail\(r\);\s*void primeRecipeShare\(r\.id\)/.test(scripts));
+    assert('Recipe close clears Share state', /function closeRdetail\(\) \{\s*cancelRecipeShareAttempt\(\)/.test(scripts));
+    assert('Recipe switch clears stale Share state', /async function openRecipeDetail[\s\S]{0,100}cancelRecipeShareAttempt\(\)/.test(scripts));
+    assert('Visible primary action is a button', html.includes('id="rdetail-share-btn"'));
+    assert('Visible manual fallback is a button', html.includes('id="rdetail-share-fallback"'));
+    assert('Primary button begins disabled', /id="rdetail-share-btn"[^>]*\bdisabled\b/.test(html));
+    const menu = scripts.match(/function openRdetailMenu\(\)[\s\S]*?\n\}/)?.[0] || '';
     assert('Share is absent from overflow menu', !menu.includes('Поделиться рецептом'));
     assert('Edit remains in overflow menu', menu.includes('Редактировать рецепт'));
-    assert('Normalize remains in overflow menu', menu.includes('Распознать количества'));
-    assert('Opening a recipe cancels stale share', /openRecipeDetail[\s\S]{0,180}cancelRecipeShareAttempt/.test(scripts));
-    assert('Closing a recipe cancels stale share', /closeRdetail[\s\S]{0,120}cancelRecipeShareAttempt/.test(scripts));
+    assert('Toast cannot cover recipe buttons', /\.toast \{[\s\S]*?pointer-events: none;/.test(html));
+    assert('Toast undo remains clickable', /\.toast-undo \{[\s\S]*?pointer-events: auto;/.test(html));
+    assert('No Share debug alert remains', !scripts.includes('SHARE DEBUG'));
+    assert('Official Telegram SDK URL is cache-versioned',
+        html.includes('https://telegram.org/js/telegram-web-app.js?63'));
 
-    const escDecls = [...html.matchAll(/(?:^|\n)\s*function\s+esc\s*\(/g)];
-    assert('Exactly one esc function remains', escDecls.length === 1, `found ${escDecls.length}`);
+    inlineScripts.forEach((script, index) => {
+        try {
+            new Function(script);
+            assert(`Inline script ${index + 1} parses`, true);
+        } catch (error) {
+            assert(`Inline script ${index + 1} parses`, false, error.message);
+        }
+    });
 }
 
-async function testModernTelegramStartsNativeShare() {
-    const sb = createSandbox();
-    await sb.context.shareCurrentRecipe();
-    assert('Modern: prepare API called once', sb.state.apiCalls.length === 1);
-    assert('Modern: correct endpoint', sb.state.apiCalls[0].url === '/recipes/42/prepare-share');
-    assert('Modern: POST used', sb.state.apiCalls[0].method === 'POST');
-    assert('Modern: shareMessage called once', sb.state.shareCalls.length === 1);
-    assert('Modern: prepared id forwarded', sb.state.shareCalls[0] === 'prepared-123');
-    assert('Modern: sent handler registered', sb.state.handlers.has('shareMessageSent'));
-    assert('Modern: failed handler registered', sb.state.handlers.has('shareMessageFailed'));
-    assert('Modern: button stays locked pending event', sb.getElement('rdetail-share-btn').disabled === true);
+async function primeReadyShare(sb) {
+    const data = await sb.context.primeRecipeShare(42);
+    assert('Prime: correct API path', sb.state.apiCalls[0]?.url === '/recipes/42/prepare-share');
+    assert('Prime: POST used', sb.state.apiCalls[0]?.method === 'POST');
+    assert('Prime: prepared data retained', data?.prepared_message_id === 'prepared-42');
+    assert('Prime: primary button enabled', sb.getElement('rdetail-share-btn').disabled === false);
+    assert('Prime: normal button label restored', sb.getElement('rdetail-share-btn').textContent === '📤 Поделиться рецептом');
 }
 
-async function testSentEventFinishesSuccessfully() {
+async function testSynchronousNativeCall() {
     const sb = createSandbox();
-    await sb.context.shareCurrentRecipe();
-    const sent = sb.state.handlers.get('shareMessageSent');
-    sent();
-    assert('Sent: success toast', sb.state.toasts.includes('✅ Рецепт отправлен!'));
-    assert('Sent: success haptic', sb.state.haptics.includes('success'));
-    assert('Sent: button unlocked', sb.getElement('rdetail-share-btn').disabled === false);
-    assert('Sent: events detached', sb.state.handlers.size === 0);
-    assert('Sent: fallback stays hidden', sb.getElement('rdetail-share-fallback').style.display === 'none');
+    await primeReadyShare(sb);
+    sb.state.apiCalls.length = 0;
+    sb.state.callOrder.length = 0;
+    sb.context.shareCurrentRecipe();
+    assert('Click: no network call in handler', sb.state.apiCalls.length === 0);
+    assert('Click: native bridge called immediately', sb.state.callOrder.includes('shareMessage'));
+    assert('Click: correct prepared id used', sb.state.shareCalls[0] === 'prepared-42');
+    assert('Click: primary locked while Telegram owns flow', sb.getElement('rdetail-share-btn').disabled === true);
+    assert('Click: sent handler registered', sb.state.handlers.has('shareMessageSent'));
+    assert('Click: failed handler registered', sb.state.handlers.has('shareMessageFailed'));
+    assert('Click: no inline fallback launched', sb.state.switchCalls.length === 0);
 }
 
-async function testUserDeclinedIsNeutral() {
+async function testDoubleTapGuard() {
     const sb = createSandbox();
-    await sb.context.shareCurrentRecipe();
+    await sb.context.primeRecipeShare(42);
+    sb.context.shareCurrentRecipe();
+    sb.context.shareCurrentRecipe();
+    assert('Double tap: native bridge called once', sb.state.shareCalls.length === 1);
+}
+
+async function testSuccessfulSend() {
+    const sb = createSandbox();
+    await sb.context.primeRecipeShare(42);
+    sb.context.shareCurrentRecipe();
+    sb.state.handlers.get('shareMessageSent')();
+    assert('Sent: success toast shown', sb.state.toasts.includes('✅ Рецепт отправлен!'));
+    assert('Sent: success haptic fired', sb.state.haptics.includes('success'));
+    assert('Sent: handlers removed', sb.state.handlers.size === 0);
+    assert('Sent: fresh prepared message requested', sb.state.apiCalls.length === 2);
+}
+
+async function testUserDeclined() {
+    const sb = createSandbox();
+    await sb.context.primeRecipeShare(42);
+    sb.context.shareCurrentRecipe();
     sb.state.handlers.get('shareMessageFailed')({ error: 'USER_DECLINED' });
-    assert('Declined: button unlocked', sb.getElement('rdetail-share-btn').disabled === false);
     assert('Declined: no success toast', !sb.state.toasts.includes('✅ Рецепт отправлен!'));
-    assert('Declined: no fallback', sb.getElement('rdetail-share-fallback').style.display === 'none');
-    assert('Declined: events detached', sb.state.handlers.size === 0);
+    assert('Declined: fallback remains hidden', sb.getElement('rdetail-share-fallback').style.display === 'none');
+    assert('Declined: primary becomes reusable', sb.getElement('rdetail-share-btn').disabled === false);
 }
 
-async function testTelegramFailureOffersManualFallback() {
+async function testNativeFailureAndManualFallback() {
     const sb = createSandbox();
-    await sb.context.shareCurrentRecipe();
+    await sb.context.primeRecipeShare(42);
+    sb.context.shareCurrentRecipe();
     sb.state.handlers.get('shareMessageFailed')({ error: 'MESSAGE_SEND_FAILED' });
-    const fallback = sb.getElement('rdetail-share-fallback');
-    assert('Failure: fallback shown', fallback.style.display === 'flex');
-    assert('Failure: standard Telegram share URL', fallback.href.startsWith('https://t.me/share/url?'));
-    assert('Failure: registered Direct Mini App nested', decodeURIComponent(fallback.href).includes('/polyana?startapp=shared_token-123'));
-    assert('Failure: no automatic second picker', sb.state.shareCalls.length === 1);
-    assert('Failure: fallback is not opened automatically', sb.state.openLinks.length === 0);
-    assert('Failure: error toast shown', sb.state.toasts.includes('Telegram не смог отправить сообщение'));
-
-    let prevented = false;
-    const result = sb.context.openRecipeShareFallback({ preventDefault() { prevented = true; } });
-    assert('Failure: manual tap prevents browser navigation', prevented === true && result === false);
-    assert('Failure: manual tap uses Telegram bridge', sb.state.openLinks[0] === fallback.href);
+    assert('Failure: fallback button shown', sb.getElement('rdetail-share-fallback').style.display === 'flex');
+    assert('Failure: fallback not automatic', sb.state.switchCalls.length === 0);
+    sb.context.shareRecipeFallback();
+    assert('Fallback tap: switchInlineQuery called once', sb.state.switchCalls.length === 1);
+    assert('Fallback tap: exact token query used', sb.state.switchCalls[0].query === 'share:token-42');
+    assert('Fallback tap: user, group and channel choices allowed',
+        JSON.stringify(sb.state.switchCalls[0].chatTypes) === JSON.stringify(['users', 'groups', 'channels']));
 }
 
-async function testSilentBridgeOffersFallback() {
+async function testSilentBridgeDoesNotSabotageNativeFlow() {
     const sb = createSandbox();
-    await sb.context.shareCurrentRecipe();
-    const eventTimeout = [...sb.state.timers.values()].find(timer => timer.ms === 15000);
-    assert('Silent: safety timer created', Boolean(eventTimeout));
-    eventTimeout.callback();
-    assert('Silent: fallback shown', sb.getElement('rdetail-share-fallback').style.display === 'flex');
-    assert('Silent: primary button unlocked', sb.getElement('rdetail-share-btn').disabled === false);
-    assert('Silent: no automatic second picker', sb.state.shareCalls.length === 1);
-    assert('Silent: event handlers removed', sb.state.handlers.size === 0);
+    await sb.context.primeRecipeShare(42);
+    sb.context.shareCurrentRecipe();
+    const timer = [...sb.state.timers.values()].find(item => item.ms === 8000);
+    assert('Silent: safety timer exists', Boolean(timer));
+    timer.callback();
+    assert('Silent: manual fallback becomes visible', sb.getElement('rdetail-share-fallback').style.display === 'flex');
+    assert('Silent: no automatic inline picker', sb.state.switchCalls.length === 0);
+    assert('Silent: primary stays locked against SDK re-entry', sb.getElement('rdetail-share-btn').disabled === true);
+    sb.context.shareRecipeFallback();
+    assert('Silent: fallback opens only after its own click', sb.state.switchCalls.length === 1);
 }
 
-async function testUnsupportedTelegramSkipsPreparedMessage() {
+async function testBridgeException() {
+    const sb = createSandbox({ shareThrows: 'WebAppShareMessageOpened' });
+    await sb.context.primeRecipeShare(42);
+    sb.context.shareCurrentRecipe();
+    assert('Exception: fallback shown', sb.getElement('rdetail-share-fallback').style.display === 'flex');
+    assert('Exception: bridge attempted once', sb.state.shareCalls.length === 1);
+    assert('Exception: no automatic fallback', sb.state.switchCalls.length === 0);
+    assert('Busy exception: primary remains locked', sb.getElement('rdetail-share-btn').disabled === true);
+}
+
+async function testUnsupportedClient() {
     const sb = createSandbox({ supported: false });
-    await sb.context.shareCurrentRecipe();
-    const fallback = sb.getElement('rdetail-share-fallback');
-    assert('Unsupported: API not called', sb.state.apiCalls.length === 0);
+    await sb.context.primeRecipeShare(42);
+    sb.context.shareCurrentRecipe();
     assert('Unsupported: shareMessage not called', sb.state.shareCalls.length === 0);
-    assert('Unsupported: fallback shown', fallback.style.display === 'flex');
-    assert('Unsupported: bot save link used', decodeURIComponent(fallback.href).includes('start=save_recipe_42'));
+    assert('Unsupported: manual fallback shown', sb.getElement('rdetail-share-fallback').style.display === 'flex');
+    assert('Unsupported: fallback still waits for click', sb.state.switchCalls.length === 0);
 }
 
-async function testApiAndBridgeErrorsOfferFallback() {
-    const apiFailure = createSandbox({ apiRejects: true });
-    await apiFailure.context.shareCurrentRecipe();
-    assert('API error: fallback shown', apiFailure.getElement('rdetail-share-fallback').style.display === 'flex');
-    assert('API error: shareMessage not called', apiFailure.state.shareCalls.length === 0);
-
-    const bridgeFailure = createSandbox({ shareThrows: true });
-    await bridgeFailure.context.shareCurrentRecipe();
-    assert('Bridge error: fallback shown', bridgeFailure.getElement('rdetail-share-fallback').style.display === 'flex');
-    assert('Bridge error: one share attempt', bridgeFailure.state.shareCalls.length === 1);
+async function testPrefetchFailureAndRetry() {
+    const sb = createSandbox({ apiRejects: true });
+    const data = await sb.context.primeRecipeShare(42);
+    assert('API failure: no data returned', data === null);
+    assert('API failure: retry button enabled', sb.getElement('rdetail-share-btn').disabled === false);
+    assert('API failure: retry label shown', sb.getElement('rdetail-share-btn').textContent === 'Повторить подготовку');
+    sb.context.shareCurrentRecipe();
+    assert('Retry click: no invalid native call', sb.state.shareCalls.length === 0);
+    assert('Retry click: starts another prepare request', sb.state.apiCalls.length === 2);
 }
 
-async function testDoubleTapAndStaleAttemptGuards() {
-    let resolveApi;
+async function testTokenOnlyBackendFallback() {
     const sb = createSandbox({
-        api: (url, method) => {
-            sb.state.apiCalls.push({ url, method });
-            return new Promise(resolve => { resolveApi = resolve; });
-        },
+        apiResponse: { prepared_message_id: null, expiration_date: null, token: 'manual-token', fallback: true },
     });
-    const first = sb.context.shareCurrentRecipe();
-    const second = sb.context.shareCurrentRecipe();
-    assert('Double tap: API called once', sb.state.apiCalls.length === 1);
-    resolveApi({ prepared_message_id: 'once', token: 'once' });
-    await Promise.all([first, second]);
-    assert('Double tap: shareMessage called once', sb.state.shareCalls.length === 1);
-
-    let resolveStale;
-    const stale = createSandbox({
-        api: (url, method) => {
-            stale.state.apiCalls.push({ url, method });
-            return new Promise(resolve => { resolveStale = resolve; });
-        },
-    });
-    const pending = stale.context.shareCurrentRecipe();
-    stale.context.cancelRecipeShareAttempt();
-    resolveStale({ prepared_message_id: 'late', token: 'late' });
-    await pending;
-    assert('Cancelled: late API does not share', stale.state.shareCalls.length === 0);
-    assert('Cancelled: button is unlocked', stale.getElement('rdetail-share-btn').disabled === false);
-    assert('Cancelled: fallback hidden', stale.getElement('rdetail-share-fallback').style.display === 'none');
+    await sb.context.primeRecipeShare(42);
+    assert('Token only: primary remains disabled', sb.getElement('rdetail-share-btn').disabled === true);
+    assert('Token only: manual fallback is visible', sb.getElement('rdetail-share-fallback').style.display === 'flex');
+    sb.context.shareRecipeFallback();
+    assert('Token only: fallback uses returned token', sb.state.switchCalls[0]?.query === 'share:manual-token');
 }
 
-async function testContractFallbacks() {
-    const tokenOnly = createSandbox({
-        apiResponse: { prepared_message_id: 'prepared', token: 'server-token' },
-    });
-    await tokenOnly.context.shareCurrentRecipe();
-    tokenOnly.state.handlers.get('shareMessageFailed')({ error: 'MESSAGE_EXPIRED' });
-    const tokenHref = decodeURIComponent(tokenOnly.getElement('rdetail-share-fallback').href);
-    assert('Token contract: builds /polyana deep link', tokenHref.includes('t.me/reciptesbot/polyana?startapp=shared_server-token'));
-
-    const backendUrl = createSandbox({
-        apiResponse: {
-            prepared_message_id: null,
-            token: 'ignored',
-            mini_app_url: 'https://t.me/otherbot/polyana?startapp=shared_backend',
+async function testStalePrepareIgnored() {
+    let resolveRequest;
+    const sb = createSandbox({
+        api(url, method) {
+            sb.state.apiCalls.push({ url, method });
+            return new Promise(resolve => { resolveRequest = resolve; });
         },
     });
-    await backendUrl.context.shareCurrentRecipe();
-    const backendHref = decodeURIComponent(backendUrl.getElement('rdetail-share-fallback').href);
-    assert('Backend contract: mini_app_url wins', backendHref.includes('t.me/otherbot/polyana?startapp=shared_backend'));
-    assert('Backend contract: no prepared share call', backendUrl.state.shareCalls.length === 0);
+    const pending = sb.context.primeRecipeShare(42);
+    sb.context.cancelRecipeShareAttempt();
+    sb.context.RDETAIL.recipe = { id: 99 };
+    resolveRequest({
+        prepared_message_id: 'stale',
+        expiration_date: Math.floor(Date.now() / 1000) + 3600,
+        token: 'stale',
+    });
+    const result = await pending;
+    assert('Stale: late response ignored', result === null);
+    assert('Stale: late prepared id not stored', sb.context.__shareState.data === null);
 }
 
 async function run() {
     runStaticChecks();
-    await testModernTelegramStartsNativeShare();
-    await testSentEventFinishesSuccessfully();
-    await testUserDeclinedIsNeutral();
-    await testTelegramFailureOffersManualFallback();
-    await testSilentBridgeOffersFallback();
-    await testUnsupportedTelegramSkipsPreparedMessage();
-    await testApiAndBridgeErrorsOfferFallback();
-    await testDoubleTapAndStaleAttemptGuards();
-    await testContractFallbacks();
+    await testSynchronousNativeCall();
+    await testDoubleTapGuard();
+    await testSuccessfulSend();
+    await testUserDeclined();
+    await testNativeFailureAndManualFallback();
+    await testSilentBridgeDoesNotSabotageNativeFlow();
+    await testBridgeException();
+    await testUnsupportedClient();
+    await testPrefetchFailureAndRetry();
+    await testTokenOnlyBackendFallback();
+    await testStalePrepareIgnored();
 
     for (const result of results) {
-        console.log(`${result.status}: ${result.name}${result.detail ? ` — ${result.detail}` : ''}`);
+        const status = result.condition ? 'PASS' : 'FAIL';
+        console.log(`${status}: ${result.name}${result.detail ? ` — ${result.detail}` : ''}`);
     }
     console.log(`\nTOTAL: ${passed} passed, ${failed} failed, ${passed + failed} total`);
     process.exitCode = failed ? 1 : 0;

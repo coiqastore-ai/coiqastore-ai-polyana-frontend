@@ -1,0 +1,27 @@
+name: smoke
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: tests
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: tests/package-lock.json
+      - name: install
+        run: npm ci
+      - name: install chromium
+        run: npx playwright install --with-deps chromium
+      # Serves the repo root locally, mocks the API, drives index.html in headless Chromium.
+      - name: smoke
+        run: node smoke.mjs

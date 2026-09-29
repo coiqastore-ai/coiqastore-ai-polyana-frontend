@@ -186,6 +186,89 @@ const browser = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePa
   await page.close();
 }
 
+// ── E: КБЖУ card: calculate (1 point), errors, manual edit via PATCH ───────
+{
+  const page = await browser.newPage();
+  const errors = []; page.on('pageerror', e => errors.push(String(e)));
+  const calls = []; await mockApi(page, calls);
+  const AI = { calories_kcal: 519.6, protein_g: 32, fat_g: 0, carbs_g: 41, basis: 'per_serving', source: 'ai_estimate' };
+  const state = { nutrition: null, calc: [], patches: [] };
+  await page.route('https://polyana.coiqa.ru/api/recipes/5**', async route => {
+    const req = route.request(); const p = new URL(req.url()).pathname.replace('/api', '');
+    const json = (b, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(b) });
+    const handled = (p === '/recipes/5' && ['GET', 'PATCH'].includes(req.method())) || p === '/recipes/5/calculate-nutrition';
+    if (!handled) return route.fallback();
+    calls.push(req.method() + ' ' + p);
+    if (p === '/recipes/5' && req.method() === 'GET') return json({ ...RECIPE, nutrition: state.nutrition });
+    if (p === '/recipes/5' && req.method() === 'PATCH') {
+      const body = JSON.parse(req.postData()); state.patches.push(body);
+      state.nutrition = body.nutrition ? { ...body.nutrition, basis: 'per_serving', source: 'manual' } : null;
+      return json({ id: 5, ok: true });
+    }
+    if (p === '/recipes/5/calculate-nutrition') {
+      const next = state.calc.shift();
+      if (next === 'ok') { state.nutrition = AI; return json({ ...RECIPE, nutrition: AI }); }
+      return json({ detail: next }, 422);
+    }
+    return route.fallback();
+  });
+  await stubTelegram(page);
+  await page.goto(BASE);
+  await page.waitForTimeout(1200);
+  await page.evaluate(() => { Telegram.WebApp.showConfirm = (m, cb) => { window.__confirm = m; cb(true); }; });
+  await page.evaluate(() => openRecipeDetail(5, 'library'));
+  await page.waitForFunction(() => { const b = document.getElementById('rdetail-share-btn'); return b && !b.disabled; }, null, { timeout: 5000 }).catch(() => {});
+  const card = () => page.$eval('#rdetail-nutrition', e => e.innerText).catch(() => '');
+  const toastText = () => page.$eval('#toast', e => e.textContent).catch(() => '');
+
+  check('E empty card offers calculate / manual', /не указано/.test(await card()) && /Рассчитать — 1 балл/.test(await card()) && /Ввести вручную/.test(await card()), await card());
+
+  state.calc.push('ok');
+  await page.evaluate(() => calculateNutrition());
+  await page.waitForTimeout(300);
+  let c = await card();
+  check('E calculate → POST calculate-nutrition, card ≈ 520 ккал, ОЦЕНКА AI, Ж 0 г',
+    calls.includes('POST /recipes/5/calculate-nutrition') && c.includes('≈ 520') && /ОЦЕНКА AI/.test(c) && c.includes('Ж 0 г') && /Оценка AI\./.test(c), c);
+  check('E confirm asked via Telegram showConfirm', await page.evaluate(() => window.__confirm) === 'Рассчитать КБЖУ за 1 балл?');
+  check('E share button kept ready, no second prepare-share',
+    calls.filter(x => x === 'POST /recipes/5/prepare-share').length === 1 && await page.$eval('#rdetail-share-btn', b => !b.disabled));
+  await page.evaluate(() => openRdetailMenu());
+  check('E menu shows «Пересчитать КБЖУ — 1 балл»', (await page.evaluate(() => document.body.innerText)).includes('Пересчитать КБЖУ — 1 балл'));
+  await page.evaluate(() => closeSheet());
+
+  state.calc.push('insufficient_balance:1:0');
+  await page.evaluate(() => calculateNutrition());
+  await page.waitForTimeout(300);
+  check('E no points → toast «Недостаточно баллов: нужно 1, доступно 0»', (await toastText()).includes('Недостаточно баллов: нужно 1, доступно 0'), await toastText());
+  state.calc.push('nutrition_not_estimated');
+  await page.evaluate(() => calculateNutrition());
+  await page.waitForTimeout(300);
+  check('E low confidence → toast «баллы возвращены», card unchanged', (await toastText()).includes('Баллы возвращены') && (await card()).includes('≈ 520'), await toastText());
+
+  await page.evaluate(() => openNutritionEdit());
+  const vals = await page.$$eval('#rdetail-nutrition input', els => els.map(e => e.value));
+  check('E edit form prefilled (fat 0 kept)', JSON.stringify(vals) === JSON.stringify(['519.6', '32', '0', '41']), JSON.stringify(vals));
+  await page.fill('#nut-calories_kcal', '-5');
+  await page.evaluate(() => saveNutritionEdit());
+  check('E negative value rejected without PATCH', state.patches.length === 0 && (await toastText()).includes('не меньше 0'));
+  await page.fill('#nut-calories_kcal', '480,5');
+  await page.evaluate(() => saveNutritionEdit());
+  await page.waitForTimeout(300);
+  check('E save → PATCH {nutrition:{…}} with comma decimal',
+    JSON.stringify(state.patches[0]) === JSON.stringify({ nutrition: { calories_kcal: 480.5, protein_g: 32, fat_g: 0, carbs_g: 41 } }), JSON.stringify(state.patches));
+  c = await card();
+  check('E manual values shown as «Указано вручную», no AI mark', c.includes('≈ 481') && c.includes('Указано вручную') && !/ОЦЕНКА AI/.test(c), c);
+
+  await page.evaluate(() => openNutritionEdit());
+  for (const k of ['calories_kcal', 'protein_g', 'fat_g', 'carbs_g']) await page.fill(`#nut-${k}`, '');
+  await page.evaluate(() => saveNutritionEdit());
+  await page.waitForTimeout(300);
+  check('E all cleared → PATCH {nutrition:null}, card back to empty',
+    JSON.stringify(state.patches[1]) === JSON.stringify({ nutrition: null }) && /не указано/.test(await card()), JSON.stringify(state.patches));
+  check('E no page errors', errors.length === 0, errors.join(' | '));
+  await page.close();
+}
+
 await browser.close();
 srv.kill();
 let fail = 0;

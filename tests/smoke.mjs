@@ -53,7 +53,9 @@ async function mockApi(page, calls) {
     if (p.startsWith('/public/recipes/')) return route.fulfill({ status: 404, body: '{}' });
     if (p === '/onboarding/status') return json({ status: 'completed' });
     if (p === '/recipes/5') return json(RECIPE);
-    if (p === '/recipes/5/prepare-share') return json({ prepared_message_id: 'pm1', token: 't1', expiration_date: Math.floor(Date.now() / 1000) + 3600 });
+    if (p === '/recipes/5/prepare-share') return json({ prepared_message_id: 'pm1', token: 't1',
+      mini_app_url: 'https://t.me/reciptesbot/polyana?startapp=shared_t1',
+      expiration_date: Math.floor(Date.now() / 1000) + 3600 });
     if (p === '/recipes/5/normalize-ingredients') return json({ updated: 2 });
     return json(p.endsWith('s') ? [] : {});
   });
@@ -136,6 +138,51 @@ const browser = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePa
   check('C ✕ loads home events (GET /events)', calls.filter(c => c === 'GET /events').length > before, calls.join(','));
   check('C home screen active', await page.$eval('#s-home', e => e.classList.contains('active')).catch(() => false));
   check('C no page errors', errors.length === 0, errors.join(' | '));
+  await page.close();
+}
+
+// ── D: «Выбрать чат другим способом»: inline → t.me/share/url → clipboard ───
+{
+  const page = await browser.newPage();
+  const errors = []; page.on('pageerror', e => errors.push(String(e)));
+  const calls = []; await mockApi(page, calls);
+  await stubTelegram(page);
+  await page.goto(BASE);
+  await page.waitForTimeout(1200);
+  await page.evaluate(() => openRecipeDetail(5, 'library'));
+  await page.waitForFunction(() => { const b = document.getElementById('rdetail-share-btn'); return b && !b.disabled; }, null, { timeout: 5000 }).catch(() => {});
+  const LINK = 'https://t.me/reciptesbot/polyana?startapp=shared_t1';
+  const fallback = setup => page.evaluate(({ setup }) => {
+    const tg = window.Telegram.WebApp;
+    window.__inline = window.__opened = window.__copied = undefined;
+    delete tg.switchInlineQuery;
+    tg.openTelegramLink = u => { window.__opened = u; };
+    Object.defineProperty(navigator, 'clipboard', { configurable: true,
+      value: { writeText: t => { window.__copied = t; return Promise.resolve(); } } });
+    if (setup === 'inline') tg.switchInlineQuery = (q, types) => { window.__inline = [q, types]; };
+    if (setup === 'inline-throws' || setup === 'all-fail')
+      tg.switchInlineQuery = () => { throw Error('WebAppMethodUnsupported'); };
+    if (setup === 'all-fail') tg.openTelegramLink = () => { throw Error('WebAppTgUrlInvalid'); };
+    shareRecipeFallback(5);
+    return new Promise(r => setTimeout(() => r({
+      inline: window.__inline, opened: window.__opened, copied: window.__copied,
+      toast: document.getElementById('toast')?.textContent || '' }), 100));
+  }, { setup });
+
+  let r = await fallback('inline');
+  check('D inline picker used when available', JSON.stringify(r.inline) === JSON.stringify(['share:t1', ['users', 'groups', 'channels']]) && !r.opened, JSON.stringify(r));
+  r = await fallback('inline-throws');
+  const expected = 'https://t.me/share/url?url=' + encodeURIComponent(LINK);
+  check('D switchInlineQuery throws → t.me/share/url with mini_app_url', (r.opened || '').startsWith(expected), JSON.stringify(r));
+  r = await fallback('no-inline');
+  check('D no switchInlineQuery (Telegram < 6.6) → t.me/share/url', (r.opened || '').startsWith(expected), JSON.stringify(r));
+  r = await fallback('all-fail');
+  check('D openTelegramLink fails → link copied + toast', r.copied === LINK && r.toast.includes('Ссылка скопирована'), JSON.stringify(r));
+  // the main Share button is unchanged: still shareMessage from the click
+  await page.evaluate(() => { window.__shared = undefined; });
+  await page.click('#rdetail-share-btn').catch(() => {});
+  check('D main Share button still calls shareMessage', await page.evaluate(() => window.__shared) === 'pm1');
+  check('D no page errors', errors.length === 0, errors.join(' | '));
   await page.close();
 }
 

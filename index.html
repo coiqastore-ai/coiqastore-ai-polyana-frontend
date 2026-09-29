@@ -4037,18 +4037,69 @@ function shareRecipe(recipeId) {
     }, 8000);
 }
 
+// «Выбрать чат другим способом»: inline chat picker → t.me/share/url → clipboard.
+// Called only from this button's own click; never automatically.
 function shareRecipeFallback(recipeId) {
     const tg = window.Telegram?.WebApp;
     const data = RECIPE_SHARE.recipeId === recipeId ? RECIPE_SHARE.data : null;
-    if (!tg || !data?.token || typeof tg.switchInlineQuery !== 'function') {
+
+    // 1. Inline chat picker. The SDK throws below Telegram 6.6 or when the
+    //    bot's inline mode is off; then fall through to the universal link.
+    if (tg && data?.token && typeof tg.switchInlineQuery === 'function') {
+        try {
+            tg.switchInlineQuery('share:' + data.token, ['users', 'groups', 'channels']);
+            return;
+        } catch (error) {
+            console.warn('switchInlineQuery unavailable:', error?.message || error);
+        }
+    }
+
+    const link = data?.mini_app_url;
+    if (!link) {
         toast('Другой способ сейчас недоступен');
         return;
     }
-    try {
-        // Called only from this button's own click; never automatically.
-        tg.switchInlineQuery('share:' + data.token, ['users', 'groups', 'channels']);
-    } catch (error) {
-        toast('Не удалось открыть выбор чата');
+
+    // 2. Telegram's share sheet, works on all versions.
+    const shareUrl = 'https://t.me/share/url'
+        + `?url=${encodeURIComponent(link)}`
+        + `&text=${encodeURIComponent('🍲 Рецепт из ПОЛЯНЫ — открой и сохрани!')}`;
+    if (tg && typeof tg.openTelegramLink === 'function') {
+        try {
+            tg.openTelegramLink(shareUrl);
+            return;
+        } catch (error) {
+            console.warn('openTelegramLink failed:', error?.message || error);
+        }
+    }
+
+    // 3. Copy the link.
+    copyRecipeShareLink(link);
+}
+
+function copyRecipeShareLink(link) {
+    const done = () => toast('Ссылка скопирована. Вставьте её в чат.', null, 5000);
+    const legacyCopy = () => {
+        const ta = document.createElement('textarea');
+        ta.value = link;
+        ta.setAttribute('readonly', '');
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        let ok = false;
+        try { ok = document.execCommand('copy'); } catch {}
+        ta.remove();
+        return ok;
+    };
+    if (navigator.clipboard?.writeText) {
+        navigator.clipboard.writeText(link).then(done).catch(() => {
+            if (legacyCopy()) done(); else toast('Не удалось поделиться рецептом');
+        });
+    } else if (legacyCopy()) {
+        done();
+    } else {
+        toast('Не удалось поделиться рецептом');
     }
 }
 

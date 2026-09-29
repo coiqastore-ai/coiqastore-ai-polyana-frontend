@@ -5001,10 +5001,10 @@ async function saveEditorialRecipe(recipeId) {
 }
 
 function closeEditorial() {
-    haptic();
     if (S.user) {
-        showScreen('s-home');
+        goHome();   // loads events: the editorial deep link skipped loadEvents()
     } else {
+        haptic();
         showScreen('s-auth');
     }
 }

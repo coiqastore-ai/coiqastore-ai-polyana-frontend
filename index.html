@@ -3507,26 +3507,8 @@ function renderRdetail(r) {
             </div>
         </div>`;
 
-    // Nutrition card
-    if (r.nutrition && r.nutrition.per_serving) {
-        const n = r.nutrition.per_serving;
-        html += `
-        <div class="card" style="margin:0 14px 10px;padding:16px;text-align:center">
-            <div style="font-size:11px;font-weight:600;color:var(--hint);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">
-                ПРИМЕРНО НА 1 ПОРЦИЮ
-            </div>
-            <div style="font-size:36px;font-weight:700;margin-bottom:2px">${n.kcal || 0}</div>
-            <div style="font-size:13px;color:var(--hint);margin-bottom:12px">ккал</div>
-            <div style="display:flex;justify-content:center;gap:24px;font-size:14px">
-                <span>Б ${n.protein_g || 0} г</span>
-                <span>Ж ${n.fat_g || 0} г</span>
-                <span>У ${n.carbs_g || 0} г</span>
-            </div>
-            <div style="font-size:11px;color:var(--hint);margin-top:12px;line-height:1.4">
-                Расчёт приблизительный. Фактические значения зависят от продуктов, их марки и способа приготовления.
-            </div>
-        </div>`;
-    }
+    // Nutrition card (per serving): AI estimate or manual values
+    html += `<div id="rdetail-nutrition">${renderNutritionCard(r)}</div>`;
 
     // Source link — show the original site's domain
     if (r.source_url) {
@@ -3651,7 +3633,7 @@ function openRdetailMenu() {
         items.push({icon:'✨', label:'Распознать количества', fn:`closeSheet();normalizeRecipeIngredients()`});
     }
     // Nutrition calculation
-    if (r.nutrition) {
+    if (hasNutrition(r.nutrition)) {
         items.push({icon:'🔄', label:'Пересчитать КБЖУ — 1 балл', fn:`closeSheet();recalculateNutrition()`});
     } else if ((r.ingredients || []).length > 0) {
         items.push({icon:'✨', label:'Рассчитать КБЖУ — 1 балл', fn:`closeSheet();calculateNutrition()`});
@@ -3685,26 +3667,188 @@ async function normalizeRecipeIngredients() {
     }
 }
 
+const NUTRITION_FIELDS = [
+    ['calories_kcal', 'Ккал'], ['protein_g', 'Белки, г'], ['fat_g', 'Жиры, г'], ['carbs_g', 'Углеводы, г'],
+];
+let NUTRITION_BUSY = false;
+
+function hasNutrition(n) {
+    return Boolean(n) && NUTRITION_FIELDS.some(([k]) => n[k] != null);
+}
+
+function nutritionIsAi(n) {
+    return n?.source === 'ai_estimate' || n?.source === 'ai_estimated';
+}
+
+function fmtNutrition(v) {
+    return v == null ? '—' : String(Math.round(Number(v)));
+}
+
+function renderNutritionCard(r) {
+    const n = r.nutrition;
+    const canCalc = (r.ingredients || []).length > 0;
+    const calcBtn = label => canCalc
+        ? `<button type="button" class="btn btn-sm btn-outline" style="flex:1" onclick="calculateNutrition()">${label}</button>`
+        : '';
+    const editBtn = label =>
+        `<button type="button" class="btn btn-sm btn-outline" style="flex:1" onclick="openNutritionEdit()">${label}</button>`;
+
+    if (!hasNutrition(n)) {
+        return `
+        <div class="card" style="margin:0 14px 10px;padding:14px 16px">
+            <div style="font-size:14px;color:var(--hint);margin-bottom:10px">КБЖУ на порцию не указано</div>
+            <div style="display:flex;gap:8px">
+                ${calcBtn('✨ Рассчитать — 1 балл')}
+                ${editBtn('✏️ Ввести вручную')}
+            </div>
+        </div>`;
+    }
+
+    const note = nutritionIsAi(n)
+        ? 'Оценка AI. Фактические значения зависят от продуктов, их марки и способа приготовления.'
+        : 'Указано вручную.';
+    return `
+        <div class="card" style="margin:0 14px 10px;padding:16px;text-align:center">
+            <div style="font-size:11px;font-weight:600;color:var(--hint);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">
+                ПРИМЕРНО НА 1 ПОРЦИЮ${nutritionIsAi(n) ? ' · ОЦЕНКА AI' : ''}
+            </div>
+            <div style="font-size:36px;font-weight:700;margin-bottom:2px">${n.calories_kcal != null ? '≈ ' + fmtNutrition(n.calories_kcal) : '—'}</div>
+            <div style="font-size:13px;color:var(--hint);margin-bottom:12px">ккал</div>
+            <div style="display:flex;justify-content:center;gap:24px;font-size:14px">
+                <span>Б ${fmtNutrition(n.protein_g)} г</span>
+                <span>Ж ${fmtNutrition(n.fat_g)} г</span>
+                <span>У ${fmtNutrition(n.carbs_g)} г</span>
+            </div>
+            <div style="font-size:11px;color:var(--hint);margin-top:12px;line-height:1.4">${note}</div>
+            <div style="display:flex;gap:8px;margin-top:12px">
+                ${editBtn('✏️ Изменить')}
+                ${calcBtn('🔄 Пересчитать — 1 балл')}
+            </div>
+        </div>`;
+}
+
+function openNutritionEdit() {
+    const r = RDETAIL.recipe;
+    const box = $('rdetail-nutrition');
+    if (!r || !box) return;
+    haptic();
+    const n = r.nutrition || {};
+    box.innerHTML = `
+        <div class="card" style="margin:0 14px 10px;padding:14px 16px">
+            <div style="font-size:11px;font-weight:600;color:var(--hint);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">
+                КБЖУ НА 1 ПОРЦИЮ
+            </div>
+            ${NUTRITION_FIELDS.map(([k, label]) => `
+            <label style="display:flex;align-items:center;gap:10px;margin-bottom:8px;font-size:14px">
+                <span style="flex:1">${label}</span>
+                <input class="form-input" id="nut-${k}" type="text" inputmode="decimal" autocomplete="off"
+                       style="width:110px;margin:0" value="${n[k] != null ? Number(n[k]) : ''}" placeholder="—">
+            </label>`).join('')}
+            <div style="display:flex;gap:8px;margin-top:6px">
+                <button type="button" class="btn btn-sm btn-green" style="flex:1" onclick="saveNutritionEdit()">Сохранить</button>
+                <button type="button" class="btn btn-sm btn-outline" style="flex:1" onclick="cancelNutritionEdit()">Отмена</button>
+            </div>
+            <div style="font-size:11px;color:var(--hint);margin-top:8px;line-height:1.4">
+                Пустые поля не сохраняются. Очистите все, чтобы удалить КБЖУ.
+            </div>
+        </div>`;
+}
+
+function cancelNutritionEdit() {
+    const r = RDETAIL.recipe;
+    if (r && $('rdetail-nutrition')) $('rdetail-nutrition').innerHTML = renderNutritionCard(r);
+}
+
+// Re-render the detail screen from a fresh recipe without re-preparing Share
+// (primeRecipeShare reuses the prepared message for the same recipe).
+function applyFreshRecipe(fresh) {
+    if (!fresh || RDETAIL.recipe?.id !== fresh.id) return;
+    RDETAIL.recipe = fresh;
+    renderRdetail(fresh);
+    void primeRecipeShare(fresh.id);
+}
+
+async function saveNutritionEdit() {
+    const r = RDETAIL.recipe;
+    if (!r || NUTRITION_BUSY) return;
+    const values = {};
+    for (const [k, label] of NUTRITION_FIELDS) {
+        const raw = ($(`nut-${k}`)?.value || '').trim().replace(',', '.');
+        if (raw === '') { values[k] = null; continue; }
+        const v = Number(raw);
+        if (!Number.isFinite(v) || v < 0) {
+            toast(`${label}: введите число не меньше 0`);
+            hapticNotif('error');
+            return;
+        }
+        values[k] = v;
+    }
+    const nutrition = Object.values(values).some(v => v != null) ? values : null;
+    NUTRITION_BUSY = true;
+    try {
+        await api(`/recipes/${r.id}`, 'PATCH', { nutrition });
+        applyFreshRecipe(await api(`/recipes/${r.id}`));
+        hapticNotif('success');
+        toast(nutrition ? '✅ КБЖУ сохранено' : 'КБЖУ удалено');
+    } catch (e) {
+        hapticNotif('error');
+        toast('Не удалось сохранить КБЖУ');
+    } finally {
+        NUTRITION_BUSY = false;
+    }
+}
+
+function apiErrorDetail(e) {
+    try { return String(JSON.parse(e?.message || '').detail || ''); }
+    catch { return String(e?.message || ''); }
+}
+
+function nutritionErrorText(e) {
+    const d = apiErrorDetail(e);
+    if (d.startsWith('insufficient_balance')) {
+        const [, need, have] = d.split(':');
+        return `Недостаточно баллов: нужно ${need || 1}, доступно ${have || 0}`;
+    }
+    if (d === 'nutrition_not_estimated') return 'Не удалось надёжно оценить КБЖУ. Баллы возвращены';
+    if (d === 'nutrition_provider_error') return 'Сервис расчёта недоступен. Баллы возвращены, попробуйте позже';
+    if (d === 'no_ingredients') return 'Добавьте ингредиенты, чтобы рассчитать КБЖУ';
+    if (d.includes('consent_required')) return 'Нужно согласие на обработку данных AI: Настройки → Документы';
+    if (e?.timeout) return 'Расчёт занял слишком долго. Если баллы списались, КБЖУ появится после обновления';
+    return 'Не удалось рассчитать КБЖУ';
+}
+
+function confirmAsync(message) {
+    const tg = S.tg;
+    if (tg?.showConfirm && (typeof tg.isVersionAtLeast !== 'function' || tg.isVersionAtLeast('6.2'))) {
+        return new Promise(resolve => {
+            try { tg.showConfirm(message, ok => resolve(Boolean(ok))); }
+            catch { resolve(window.confirm(message)); }
+        });
+    }
+    return Promise.resolve(window.confirm(message));
+}
+
 async function calculateNutrition() {
     const r = RDETAIL.recipe;
-    if (!r) return;
+    if (!r || NUTRITION_BUSY) return;
     haptic();
 
-    // Confirm before spending point
-    const confirmed = confirm('Рассчитать КБЖУ за 1 балл?');
-    if (!confirmed) return;
+    const again = hasNutrition(r.nutrition);
+    if (!await confirmAsync(again ? 'Пересчитать КБЖУ за 1 балл?' : 'Рассчитать КБЖУ за 1 балл?')) return;
 
-    toast('✨ Рассчитываю КБЖУ…');
+    NUTRITION_BUSY = true;
+    toast('✨ Рассчитываю КБЖУ…', null, 60000);
     try {
-        const result = await api(`/recipes/${r.id}/calculate-nutrition`, 'POST');
-        // Reload recipe with nutrition data
-        await openRecipeDetail(r.id, RDETAIL.from);
+        // Responds with the recipe in the GET /recipes/{id} format.
+        const fresh = await api(`/recipes/${r.id}/calculate-nutrition`, 'POST', null, 60000);
+        applyFreshRecipe(fresh);
         hapticNotif('success');
-        toast('КБЖУ рассчитано');
-    } catch(e) {
+        toast('✅ КБЖУ рассчитано');
+    } catch (e) {
         hapticNotif('error');
-        const msg = e?.message || 'Не удалось рассчитать КБЖУ';
-        toast(msg);
+        toast(nutritionErrorText(e), null, 5000);
+    } finally {
+        NUTRITION_BUSY = false;
     }
 }
 
@@ -4932,7 +5076,7 @@ function renderEditorialRecipe(r) {
         html += '<div class="card" style="margin-bottom:16px;padding:12px">';
         html += '<div style="font-weight:600;margin-bottom:4px">КБЖУ на порцию</div>';
         html += `<div style="font-size:14px">${n.calories_kcal ? Math.round(n.calories_kcal) + ' ккал' : ''} ${n.protein_g ? '· Б ' + n.protein_g : ''} ${n.fat_g ? '· Ж ' + n.fat_g : ''} ${n.carbs_g ? '· У ' + n.carbs_g : ''}</div>`;
-        if (n.source === 'ai_estimated') html += '<div style="font-size:11px;color:var(--hint);margin-top:4px">⚠️ Оценено AI</div>';
+        if (nutritionIsAi(n)) html += '<div style="font-size:11px;color:var(--hint);margin-top:4px">⚠️ Оценено AI</div>';
         html += '</div>';
     }
 

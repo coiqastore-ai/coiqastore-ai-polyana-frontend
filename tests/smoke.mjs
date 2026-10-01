@@ -63,18 +63,30 @@ async function mockApi(page, calls) {
 }
 
 // Minimal Telegram.WebApp for the "inside Telegram" scenarios.
-const TG_STUB = `
+// mainButton: 'ok' (draws, isVisible follows show/hide), 'none' (no MainButton),
+// 'silent' (show() does nothing: isVisible stays false).
+const tgStub = ({ platform = 'ios', mainButton = 'ok' } = {}) => `
+  window.__mb = { shown: false, text: '', clicks: [] };
+  const mainButton = {
+    isVisible: false,
+    show(){ if (${JSON.stringify(mainButton)} === 'ok') { this.isVisible = true; window.__mb.shown = true; } },
+    hide(){ this.isVisible = false; window.__mb.shown = false; },
+    setText(t){ window.__mb.text = t; }, onClick(f){ window.__mb.clicks.push(f); },
+    offClick(f){ window.__mb.clicks = window.__mb.clicks.filter(x => x !== f); },
+    showProgress(){}, hideProgress(){}, enable(){}, disable(){}, setParams(){},
+  };
   window.Telegram = { WebApp: {
+    platform: ${JSON.stringify(platform)}, version: '8.0',
     initData: 'query_id=x&user=%7B%7D&hash=h', initDataUnsafe: { user: { id: 1, first_name: 'Нина' } },
     ready(){}, expand(){}, setHeaderColor(){}, setBackgroundColor(){}, isVersionAtLeast(){ return true; },
     onEvent(){}, offEvent(){}, shareMessage(id){ window.__shared = id; }, openTelegramLink(u){ window.__opened = u; },
-    MainButton: { show(){}, hide(){}, setText(){}, onClick(){}, offClick(){}, showProgress(){}, hideProgress(){}, enable(){}, disable(){}, setParams(){} },
+    ${mainButton === 'none' ? '' : 'MainButton: mainButton,'}
     BackButton: { show(){}, hide(){}, onClick(){}, offClick(){} },
     HapticFeedback: { impactOccurred(){}, notificationOccurred(){}, selectionChanged(){} },
     close(){},
   } };`;
-const stubTelegram = page => page.route('**/telegram-web-app.js*',
-  r => r.fulfill({ status: 200, contentType: 'text/javascript', body: TG_STUB }));
+const stubTelegram = (page, opts) => page.route('**/telegram-web-app.js*',
+  r => r.fulfill({ status: 200, contentType: 'text/javascript', body: tgStub(opts) }));
 
 const browser = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {});
 
@@ -266,6 +278,47 @@ const browser = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePa
   check('E all cleared → PATCH {nutrition:null}, card back to empty',
     JSON.stringify(state.patches[1]) === JSON.stringify({ nutrition: null }) && /не указано/.test(await card()), JSON.stringify(state.patches));
   check('E no page errors', errors.length === 0, errors.join(' | '));
+  await page.close();
+}
+
+// ── F: «Создать событие» when Telegram's MainButton is missing / not drawn ──
+for (const [label, opts, expectFallback] of [
+  ['no MainButton', { mainButton: 'none' }, true],
+  ['tdesktop', { platform: 'tdesktop' }, true],
+  ['show() not taken (isVisible false)', { mainButton: 'silent' }, true],
+  ['ios with MainButton', {}, false],
+]) {
+  const page = await browser.newPage();
+  const errors = []; page.on('pageerror', e => errors.push(String(e)));
+  const calls = []; await mockApi(page, calls);
+  const posted = [];
+  await page.route('https://polyana.coiqa.ru/api/events', route => {
+    if (route.request().method() !== 'POST') return route.fallback();
+    posted.push(JSON.parse(route.request().postData()));
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ id: 42 }) });
+  });
+  await stubTelegram(page, opts);
+  await page.goto(BASE);
+  await page.waitForTimeout(1200);
+  await page.evaluate(() => goCreate());
+  await page.waitForTimeout(200);
+  const fb = await page.$eval('#mb-fallback', e => !e.hidden && getComputedStyle(e).display !== 'none' && e.getBoundingClientRect().height > 0).catch(() => false);
+  const fbText = await page.$eval('#mb-fallback-btn', e => e.textContent).catch(() => '');
+  const mb = await page.evaluate(() => window.__mb);
+  if (expectFallback) {
+    check(`F ${label}: in-page «Создать событие» visible`, fb && fbText === 'Создать событие', JSON.stringify({ fb, fbText }));
+    check(`F ${label}: MainButton not left on / no handler`, !mb.shown && mb.clicks.length === 0, JSON.stringify(mb));
+    await page.fill('#ev-name', 'Шашлыки у Нины');
+    await page.click('#mb-fallback-btn');
+    await page.waitForTimeout(400);
+    check(`F ${label}: click → POST /events once`, posted.length === 1 && posted[0].name === 'Шашлыки у Нины', JSON.stringify(posted));
+    check(`F ${label}: back home, in-page button hidden`,
+      await page.$eval('#s-home', e => e.classList.contains('active')).catch(() => false)
+      && await page.$eval('#mb-fallback', e => e.hidden).catch(() => false));
+  } else {
+    check(`F ${label}: MainButton used, no in-page duplicate`, !fb && mb.shown && mb.text === 'Создать событие' && mb.clicks.length === 1, JSON.stringify({ fb, mb }));
+  }
+  check(`F ${label}: no page errors`, errors.length === 0, errors.join(' | '));
   await page.close();
 }
 

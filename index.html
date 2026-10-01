@@ -297,6 +297,15 @@
     }
     .fab:active { transform: scale(.93); box-shadow: 0 2px 8px rgba(139,21,56,.3); }
 
+    /* In-page twin of Telegram MainButton (see setMainBtn) */
+    #mb-fallback {
+        position: fixed; left: 0; right: 0; bottom: 0; z-index: 45;
+        padding: 10px 12px calc(env(safe-area-inset-bottom) + 10px);
+        background: var(--bg); box-shadow: 0 -1px 0 var(--divider);
+    }
+    #mb-fallback .btn { max-width: 616px; margin: 0 auto; }
+    body.has-mb-fallback .page { padding-bottom: 150px; }
+
     /* ── Home greeting ─────────────────────────────────────────────────────── */
     .greeting-row {
         display: flex; align-items: center; justify-content: space-between;
@@ -1780,23 +1789,71 @@ function selectEmoji(el) {
 // ═══════════════════════════════════════════════════════════════════════════
 // MAIN BUTTON helper
 // ═══════════════════════════════════════════════════════════════════════════
+// Some clients never draw MainButton (Telegram Desktop showed the bot name at the
+// bottom instead of «Создать событие»). There the action goes to an in-page button
+// (#mb-fallback) instead — one or the other, never both.
+// Platforms where MainButton is not used at all:
+const MAINBTN_INPAGE_PLATFORMS = ['tdesktop'];
+
+function mainBtnUsable() {
+    const mb = S.tg?.MainButton;
+    if (!mb || typeof mb.show !== 'function') return false;
+    const platform = S.tg.platform;
+    if (!platform || platform === 'unknown') return false;          // not inside a Telegram client
+    if (MAINBTN_INPAGE_PLATFORMS.includes(platform)) return false;
+    if (typeof S.tg.isVersionAtLeast === 'function' && !S.tg.isVersionAtLeast('6.0')) return false;
+    return true;
+}
+
 function setMainBtn(text, fn, visible=true) {
-    if (!S.tg?.MainButton) return;
-    S.tg.MainButton.offClick(_mainBtnHandler);
-    _mainBtnHandler = fn || (()=>{});
-    if (visible) {
-        S.tg.MainButton.setText(text);
-        S.tg.MainButton.onClick(_mainBtnHandler);
-        S.tg.MainButton.show();
-    } else {
-        S.tg.MainButton.hide();
+    const mb = S.tg?.MainButton;
+    if (mb) {
+        try { mb.offClick(_mainBtnHandler); } catch {}
     }
+    _mainBtnHandler = fn || (()=>{});
+    let shown = false;
+    if (visible && mainBtnUsable()) {
+        try {
+            mb.setText(text);
+            mb.onClick(_mainBtnHandler);
+            mb.show();
+            shown = mb.isVisible !== false;
+        } catch (e) {
+            console.warn('[POLYANA] MainButton.show failed', e);
+        }
+    }
+    if (!shown && mb) {
+        try { mb.offClick(_mainBtnHandler); mb.hide(); } catch {}
+    }
+    _setFallbackBtn(visible && !shown ? text : null);
 }
 let _mainBtnHandler = ()=>{};
+
+function _setFallbackBtn(text) {
+    const wrap = $('mb-fallback'), btn = $('mb-fallback-btn');
+    if (!wrap || !btn) return;
+    wrap.hidden = !text;
+    document.body.classList.toggle('has-mb-fallback', !!text);
+    if (text) { btn.textContent = text; btn.disabled = false; }
+}
 
 function hideMainBtn() {
     S.tg?.MainButton?.hide?.();
     S.tg?.MainButton?.offClick?.(_mainBtnHandler);
+    _setFallbackBtn(null);
+}
+
+// Progress/disable for whichever button carries the action (blocks double submit).
+function mainBtnBusy(busy) {
+    const mb = S.tg?.MainButton;
+    if (mb) {
+        try {
+            if (busy) { mb.showProgress(false); mb.disable(); }
+            else { mb.hideProgress(); mb.enable(); }
+        } catch {}
+    }
+    const btn = $('mb-fallback-btn');
+    if (btn) btn.disabled = !!busy;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -2574,10 +2631,7 @@ async function submitCreate() {
     const description = $('ev-desc').value.trim() || null;
     const activeTpl = document.querySelector('.tpl-btn.active')?.dataset.tpl || null;
 
-    if (S.tg?.MainButton) {
-        S.tg.MainButton.showProgress(false);
-        S.tg.MainButton.disable();
-    }
+    mainBtnBusy(true);
 
     try {
         const data = await api('/events', 'POST', {
@@ -2605,10 +2659,7 @@ async function submitCreate() {
         console.error('createEvent:', e);
         toast(e.status === 401 ? 'Ошибка авторизации' : 'Не удалось создать событие');
     } finally {
-        if (S.tg?.MainButton) {
-            S.tg.MainButton.hideProgress();
-            S.tg.MainButton.enable();
-        }
+        mainBtnBusy(false);
     }
 }
 
@@ -3362,7 +3413,7 @@ async function submitFullRecipe() {
         .filter(s => (s.text||'').trim())
         .map(s => ({text: s.text.trim()}));
 
-    if (S.tg?.MainButton) { S.tg.MainButton.showProgress(false); S.tg.MainButton.disable(); }
+    mainBtnBusy(true);
 
     try {
         if (RF.editId) {
@@ -3408,7 +3459,7 @@ async function submitFullRecipe() {
         console.error('submitFullRecipe:', e);
         toast(e.status === 401 ? 'Ошибка авторизации' : 'Не удалось сохранить рецепт');
     } finally {
-        if (S.tg?.MainButton) { S.tg.MainButton.hideProgress(); S.tg.MainButton.enable(); }
+        mainBtnBusy(false);
     }
 }
 
@@ -4703,7 +4754,7 @@ async function submitLibRecipe() {
         .filter(s => (s.text||'').trim())
         .map(s => ({text: s.text.trim()}));
 
-    if (S.tg?.MainButton) { S.tg.MainButton.showProgress(false); S.tg.MainButton.disable(); }
+    mainBtnBusy(true);
 
     try {
         await api('/recipes', 'POST', {
@@ -4722,7 +4773,7 @@ async function submitLibRecipe() {
         console.error('submitLibRecipe:', e);
         toast(e.status === 401 ? 'Ошибка авторизации' : 'Не удалось сохранить рецепт');
     } finally {
-        if (S.tg?.MainButton) { S.tg.MainButton.hideProgress(); S.tg.MainButton.enable(); }
+        mainBtnBusy(false);
     }
 }
 
@@ -5217,6 +5268,11 @@ function closeEditorial() {
             <div class="loading-wrap" style="min-height:60vh"><div class="logo-spin">🌿</div></div>
         </div>
     </div>
+</div>
+
+<!-- Shown only when Telegram's MainButton is unavailable (see setMainBtn) -->
+<div id="mb-fallback" hidden>
+    <button type="button" class="btn btn-green" id="mb-fallback-btn" onclick="haptic(); _mainBtnHandler()"></button>
 </div>
 
 </body>

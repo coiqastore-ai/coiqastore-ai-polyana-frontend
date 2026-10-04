@@ -1454,6 +1454,7 @@
                 <div class="ref-stat-label">Ожидают</div>
             </div>
         </div>
+        <button class="btn btn-green" id="ref-topup-btn" style="margin:12px 0" onclick="openTopup()">⭐ Пополнить AI-баланс</button>
 
         <!-- Stats -->
         <div class="card ref-details-card">
@@ -1575,24 +1576,6 @@
         <label class="form-label" for="recipe-servings">Порций</label>
         <input class="form-input" id="recipe-servings" type="number" value="4" min="1" max="100">
         <button class="btn btn-green" style="margin-top:16px" onclick="submitRecipe()">Добавить блюдо</button>
-    </div>
-</div>
-
-<!-- Email-for-receipt sheet (card top-up, 54-ФЗ) -->
-<div id="email-sheet" class="bottom-sheet">
-    <div class="sheet-handle"></div>
-    <div class="sheet-title">Email для чека</div>
-    <div style="padding:0 20px 20px">
-        <div style="font-size:13px;color:var(--hint);margin-bottom:10px">
-            На него ЮКасса пришлёт фискальный чек об оплате.
-        </div>
-        <input class="form-input" id="topup-email" type="email" inputmode="email"
-               placeholder="you@example.com" autocomplete="email" maxlength="120"
-               oninput="onEmailInput()"
-               onkeydown="if(event.key==='Enter')submitEmailTopup()">
-        <div class="form-error" id="topup-email-err" style="display:none">Введите корректный email</div>
-        <button class="btn btn-green" id="topup-email-btn" style="margin-top:16px" disabled
-                onclick="submitEmailTopup()">Продолжить к оплате</button>
     </div>
 </div>
 
@@ -1769,7 +1752,6 @@ function closeSheet() {
     $('overlay').classList.remove('show');
     $('bottom-sheet').classList.remove('show');
     $('add-recipe-sheet').classList.remove('show');
-    $('email-sheet')?.classList.remove('show');
 }
 
 function openAddRecipe() {
@@ -2067,6 +2049,7 @@ function openSettings() {
     haptic();
     openSheet('Аккаунт', [
         {icon: '👤', label: S.user ? `${S.user.first_name || ''}${S.user.username ? ' @'+S.user.username : ''}`.trim() : '—', fn: 'closeSheet()'},
+        {icon: '✨', label: 'AI-баланс и пополнение', fn: 'closeSheet();openTopup()'},
         {icon: '🎁', label: 'Пригласить друзей', fn: 'closeSheet();openReferral()'},
         {icon: '📤', label: 'Поделиться ПОЛЯНОЙ', fn: 'shareApp(); closeSheet()'},
         {icon: '📄', label: 'Документы и конфиденциальность', fn: 'closeSheet();openPrivacy()'},
@@ -2887,7 +2870,7 @@ async function inviteCollab() {
 // ═══════════════════════════════════════════════════════════════════════════
 // INVITATION GENERATOR
 // ═══════════════════════════════════════════════════════════════════════════
-const INV = { mode: 'free', theme: '', image: null, loading: false, themes: [], balance: 0 };
+const INV = { mode: 'free', theme: '', image: null, loading: false, themes: [] };
 
 async function openInviteScreen() {
     const ev = S.currentEvent;
@@ -2906,133 +2889,122 @@ async function openInviteScreen() {
         try { INV.themes = await api('/invite/themes'); } catch { INV.themes = []; }
     }
     renderInviteThemes();
-    refreshBalance();
 }
 
-async function refreshBalance() {
-    try {
-        const d = await api('/balance');
-        INV.balance = d.balance || 0;
-        $('inv-balance-val').textContent = (d.balance_rub ?? 0) + ' ₽';
-        // Show referral offer when balance is low
-        if (INV.balance === 0) {
-            showReferralHook();
+// ═══════════════════════════════════════════════════════════════════════════
+// AI-BALANCE & TOP-UP (Telegram Stars only)
+// Inside Telegram digital goods are sold only for Stars (Telegram rules): no card payments here.
+// Points are credited by the bot on successful_payment, so after «paid» we poll
+// /wallet/me until the balance grows.
+// ═══════════════════════════════════════════════════════════════════════════
+const TOPUP = { busy: false };
+// The card top-up stored a receipt email here; it is not used any more.
+try { localStorage.removeItem('polyana_email'); } catch {}
+
+function plural(n, one, few, many) {
+    const m10 = n % 10, m100 = n % 100;
+    if (m10 === 1 && m100 !== 11) return one;
+    if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return few;
+    return many;
+}
+function pointsText(n) { return `${n} ${plural(n, 'балл', 'балла', 'баллов')}`; }
+
+async function walletPoints() {
+    const w = await api('/wallet/me');
+    return Number(w?.total_available_points ?? 0);
+}
+
+async function openTopup(reason = '') {
+    haptic();
+    let balance = null, pk = { enabled: false, packages: [] };
+    const [w, p] = await Promise.allSettled([walletPoints(), api('/payments/packages?provider=telegram_stars')]);
+    if (w.status === 'fulfilled') balance = w.value;
+    if (p.status === 'fulfilled' && p.value) pk = p.value;
+    const title = reason || (balance === null ? 'AI-баланс' : `AI-баланс: ${pointsText(balance)}`);
+    const items = [];
+    const canPay = pk.enabled && S.tg?.openInvoice;
+    if (canPay) {
+        for (const pkg of pk.packages || []) {
+            if (!/^[a-z0-9_]+$/.test(pkg.code || '')) continue;  // goes into an onclick string
+            items.push({ icon: '⭐', label: `${pointsText(pkg.total_points)} — ${pkg.stars} ⭐`,
+                         fn: `closeSheet();buyStars('${pkg.code}')` });
         }
-    } catch {
-        $('inv-balance-val').textContent = '—';
     }
+    if (!items.length) {
+        items.push({ icon: '⏳', label: pk.enabled ? 'Обновите Telegram, чтобы оплатить звёздами'
+                                                  : 'Пополнение звёздами скоро появится', fn: 'closeSheet()' });
+    }
+    items.push({ icon: '🎁', label: 'Получить баллы бесплатно', fn: 'closeSheet();openReferral()' });
+    openSheet(title, items);
 }
 
-let _referralHookCooldown = 0;
-function showReferralHook() {
-    // Cooldown: don't show more than once per 7 days (except on explicit zero-balance screen)
-    const now = Date.now();
-    if (now - _referralHookCooldown < 7 * 24 * 60 * 60 * 1000) return;
-    _referralHookCooldown = now;
-    // Show as a toast-like hint
-    setTimeout(() => {
-        toast('🎁 Получите AI-баллы бесплатно — приглашайте друзей!');
-    }, 1000);
-}
-
-function openTopup() {
+async function buyStars(code) {
+    if (TOPUP.busy) return;
+    TOPUP.busy = true;
     haptic();
-    openSheet('Пополнить баланс', [
-        { icon: '💳', label: 'Банковской картой', fn: "closeSheet();openTopupAmount('card')" },
-        { icon: '⭐', label: 'Telegram Stars', fn: "closeSheet();openTopupAmount('stars')" },
-    ]);
-}
-
-function openTopupAmount(method) {
-    openSheet(method === 'stars' ? 'Stars — выбери сумму' : 'Картой — выбери сумму',
-        [100, 200, 500, 1000].map(a => (
-            { icon: '💰', label: a + ' ₽', fn: `closeSheet();topUp(${a},'${method}')` }
-        )));
-}
-
-function isValidEmail(e) {
-    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(e || '').trim());
-}
-function getStoredEmail() {
-    try { return localStorage.getItem('polyana_email') || ''; } catch { return ''; }
-}
-
-let _pendingTopupAmount = 0;
-
-async function topUp(amount, method = 'card') {
-    haptic();
-    if (method === 'stars') {
-        try {
-            const d = await api('/balance/topup-stars', 'POST', { amount });
-            if (d.invoice_link && S.tg?.openInvoice) {
-                S.tg.openInvoice(d.invoice_link, (status) => {
-                    if (status === 'paid') { toast('Оплачено! Баланс пополнен'); hapticNotif('success'); refreshBalance(); }
-                    else if (status === 'failed') { toast('Оплата не прошла'); }
-                });
-            } else {
-                toast('Stars недоступны в этой версии Telegram');
-            }
-        } catch (e) {
-            toast('Не удалось создать счёт: ' + (e?.message || ''));
-            hapticNotif('error');
-        }
+    let before = null;
+    try { before = await walletPoints(); } catch {}
+    let d;
+    try {
+        d = await api('/payments/stars/invoice', 'POST', { package_code: code });
+    } catch (e) {
+        TOPUP.busy = false;
+        hapticNotif('error');
+        toast(e?.status === 410 ? 'Пополнение звёздами пока недоступно' : 'Не удалось создать счёт, попробуйте ещё раз');
         return;
     }
-    // Card: a fiscal receipt (54-ФЗ) requires the buyer's email — make it mandatory.
-    const email = getStoredEmail();
-    if (!isValidEmail(email)) { openEmailSheet(amount); return; }
-    await doCardTopup(amount, email);
-}
-
-async function doCardTopup(amount, email) {
+    if (!d?.invoice_link || !S.tg?.openInvoice) {
+        TOPUP.busy = false;
+        toast('Обновите Telegram, чтобы оплатить звёздами');
+        return;
+    }
     try {
-        const d = await api('/balance/topup', 'POST', { amount, email });
-        if (d.confirmation_url) {
-            toast('Открываю оплату ЮКассы…');
-            if (S.tg?.openLink) S.tg.openLink(d.confirmation_url);
-            else window.open(d.confirmation_url, '_blank');
-        }
-    } catch (e) {
-        toast('Не удалось создать платёж: ' + (e?.message || ''));
-        hapticNotif('error');
+        S.tg.openInvoice(d.invoice_link, status => { onInvoiceClosed(status, before, d.total_points); });
+    } catch {
+        TOPUP.busy = false;
+        toast('Не удалось открыть оплату, попробуйте ещё раз');
     }
 }
 
-function openEmailSheet(amount) {
-    _pendingTopupAmount = amount;
-    $('topup-email').value = getStoredEmail();
-    onEmailInput();
-    $('overlay').classList.add('show');
-    $('email-sheet').classList.add('show');
-    setTimeout(() => $('topup-email').focus(), 150);
+async function onInvoiceClosed(status, before, added) {
+    try {
+        if (status === 'paid' || status === 'pending') {
+            hapticNotif('success');
+            toast('Оплата прошла, начисляем баллы…', null, 10000);
+            const now = await waitForCredit(before, 10000);
+            if (now !== null) {
+                const plus = before === null ? added : now - before;
+                toast(`✅ Начислено +${pointsText(plus)}. Баланс: ${pointsText(now)}`, null, 5000);
+                if ($('s-referral')?.classList.contains('active')) openReferral();  // refresh its balance cards
+            } else {
+                toast('Оплата прошла. Баллы появятся в течение пары минут', null, 5000);
+            }
+        } else if (status === 'cancelled') {
+            toast('Оплата отменена');
+        } else {
+            hapticNotif('error');
+            toast('Оплата не прошла. Звёзды не списаны, попробуйте ещё раз', null, 5000);
+        }
+    } finally {
+        TOPUP.busy = false;
+    }
 }
 
-function onEmailInput() {
-    const v = $('topup-email').value.trim();
-    $('topup-email-btn').disabled = !isValidEmail(v);
-    $('topup-email-err').style.display = (v && !isValidEmail(v)) ? 'block' : 'none';
+// Poll /wallet/me until the balance exceeds `before`; null if it did not within `ms`.
+async function waitForCredit(before, ms) {
+    const until = Date.now() + ms;
+    while (Date.now() < until) {
+        await new Promise(r => setTimeout(r, 1000));
+        try {
+            const now = await walletPoints();
+            if (before === null || now > before) return now;
+        } catch {}
+    }
+    return null;
 }
 
-async function submitEmailTopup() {
-    const email = $('topup-email').value.trim();
-    if (!isValidEmail(email)) { onEmailInput(); return; }
-    try { localStorage.setItem('polyana_email', email); } catch {}
-    closeSheet();
-    await doCardTopup(_pendingTopupAmount, email);
-}
-
-function closeInvite() {
-    setBackBtn(null);
-    showScreen('s-detail');
-}
-
-function setInviteMode(mode) {
-    haptic('light');
-    INV.mode = mode;
-    $('inv-mode-free').classList.toggle('active', mode === 'free');
-    $('inv-mode-ai').classList.toggle('active', mode === 'ai');
-    $('inv-balance').style.display = mode === 'ai' ? 'flex' : 'none';
-    if (mode === 'ai') refreshBalance();
+function showInsufficientPoints(need, have) {
+    openTopup(`Не хватает баллов: нужно ${need}, на балансе ${have}`);
 }
 
 function renderInviteThemes() {
@@ -3897,7 +3869,14 @@ async function calculateNutrition() {
         toast('✅ КБЖУ рассчитано');
     } catch (e) {
         hapticNotif('error');
-        toast(nutritionErrorText(e), null, 5000);
+        const d = apiErrorDetail(e);
+        if (d.startsWith('insufficient_balance')) {
+            hideToast();
+            const [, need, have] = d.split(':');
+            showInsufficientPoints(Number(need) || 1, Number(have) || 0);
+        } else {
+            toast(nutritionErrorText(e), null, 5000);
+        }
     } finally {
         NUTRITION_BUSY = false;
     }

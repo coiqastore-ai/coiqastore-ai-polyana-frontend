@@ -251,7 +251,10 @@ const browser = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePa
   state.calc.push('insufficient_balance:1:0');
   await page.evaluate(() => calculateNutrition());
   await page.waitForTimeout(300);
-  check('E no points → toast «Недостаточно баллов: нужно 1, доступно 0»', (await toastText()).includes('Недостаточно баллов: нужно 1, доступно 0'), await toastText());
+  const noPoints = await page.$eval('#bottom-sheet', e => e.innerText).catch(() => '');
+  check('E no points → «Не хватает баллов» dialog with top-up', noPoints.includes('Не хватает баллов: нужно 1, на балансе 0')
+    && noPoints.includes('Получить баллы бесплатно'), noPoints);
+  await page.evaluate(() => closeSheet());
   state.calc.push('nutrition_not_estimated');
   await page.evaluate(() => calculateNutrition());
   await page.waitForTimeout(300);
@@ -319,6 +322,98 @@ for (const [label, opts, expectFallback] of [
     check(`F ${label}: MainButton used, no in-page duplicate`, !fb && mb.shown && mb.text === 'Создать событие' && mb.clicks.length === 1, JSON.stringify({ fb, mb }));
   }
   check(`F ${label}: no page errors`, errors.length === 0, errors.join(' | '));
+  await page.close();
+}
+
+// ── G: AI-balance top-up for Telegram Stars (paid / cancelled / failed) ─────
+{
+  const html = readFileSync(resolve(ROOT, 'index.html'), 'utf8');
+  check('G no YooKassa / card / receipt email in the Mini App',
+    !/ЮК|yookassa|\/balance\/topup|email-sheet|topup-email/i.test(html));
+
+  for (const [status, expectToast, credited] of [
+    ['paid', '✅ Начислено +110 баллов. Баланс: 135 баллов', true],
+    ['cancelled', 'Оплата отменена', false],
+    ['failed', 'Оплата не прошла', false],
+  ]) {
+    const page = await browser.newPage();
+    const errors = []; page.on('pageerror', e => errors.push(String(e)));
+    page.on('console', m => { if (m.type() === 'error') errors.push('console: ' + m.text()); });
+    const calls = []; await mockApi(page, calls);
+    const st = { points: 25, invoices: [] };
+    await page.route('https://polyana.coiqa.ru/api/{wallet/me,payments/**}', async route => {
+      const req = route.request(); const p = new URL(req.url()).pathname.replace('/api', '');
+      const json = b => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(b) });
+      calls.push(req.method() + ' ' + p);
+      if (p === '/wallet/me') return json({ total_available_points: st.points });
+      if (p === '/payments/packages') return json({ enabled: true, packages: [
+        { code: 'points_300', title: 'Оптимальный', total_points: 110, stars: 50 }] });
+      if (p === '/payments/stars/invoice') {
+        st.invoices.push(JSON.parse(req.postData()));
+        return json({ ok: true, invoice_link: 'https://t.me/$inv', order_id: 'o1', total_points: 110 });
+      }
+      return route.fallback();
+    });
+    await stubTelegram(page);
+    await page.goto(BASE);
+    await page.waitForTimeout(1200);
+    await page.evaluate(({ status, credited }) => {
+      Telegram.WebApp.openInvoice = (link, cb) => {
+        window.__invoice = link;
+        // the bot credits a moment after Telegram reports «paid»
+        setTimeout(() => cb(status), 50);
+      };
+      window.__credit = credited;
+    }, { status, credited });
+    if (credited) setTimeout(() => { st.points = 135; }, 1600);
+
+    await page.evaluate(() => openTopup());
+    await page.waitForTimeout(400);
+    const sheet = await page.$eval('#bottom-sheet', e => e.innerText).catch(() => '');
+    check(`G ${status}: sheet shows balance and Stars package`,
+      sheet.includes('AI-баланс: 25 баллов') && sheet.includes('110 баллов — 50 ⭐') && sheet.includes('Получить баллы бесплатно'), sheet);
+    await page.evaluate(() => buyStars('points_300'));
+    await page.waitForFunction(t => (document.getElementById('toast')?.textContent || '').includes(t),
+      expectToast, { timeout: 8000 }).catch(() => {});
+    const t = await page.$eval('#toast', e => e.textContent).catch(() => '');
+    check(`G ${status}: invoice for the package opened`,
+      JSON.stringify(st.invoices) === JSON.stringify([{ package_code: 'points_300' }]) && await page.evaluate(() => window.__invoice) === 'https://t.me/$inv',
+      JSON.stringify(st.invoices));
+    check(`G ${status}: toast «${expectToast}»`, t.includes(expectToast), t);
+    const polls = calls.filter(c => c === 'GET /wallet/me').length;
+    check(`G ${status}: wallet polled only after «paid»`, credited ? polls >= 3 : polls <= 2, String(polls));
+    check(`G ${status}: no page or console errors`, errors.length === 0, errors.join(' | '));
+    await page.close();
+  }
+
+  // Stars off for this user (flag / allowlist) and «not enough points» from КБЖУ.
+  const page = await browser.newPage();
+  const errors = []; page.on('pageerror', e => errors.push(String(e)));
+  const calls = []; await mockApi(page, calls);
+  await page.route('https://polyana.coiqa.ru/api/{wallet/me,payments/**,recipes/5/calculate-nutrition}', route => {
+    const p = new URL(route.request().url()).pathname.replace('/api', '');
+    const json = (b, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(b) });
+    if (p === '/wallet/me') return json({ total_available_points: 0 });
+    if (p === '/payments/packages') return json({ enabled: false, packages: [] });
+    return json({ detail: 'insufficient_balance:1:0' }, 402);
+  });
+  await stubTelegram(page);
+  await page.goto(BASE);
+  await page.waitForTimeout(1200);
+  await page.evaluate(() => { Telegram.WebApp.showConfirm = (m, cb) => cb(true); Telegram.WebApp.openInvoice = () => {}; });
+  await page.evaluate(() => openRecipeDetail(5, 'library'));
+  await page.waitForTimeout(600);
+  await page.evaluate(() => calculateNutrition());
+  await page.waitForTimeout(600);
+  const sheet = await page.$eval('#bottom-sheet', e => e.innerText).catch(() => '');
+  check('G not enough points → dialog with top-up and free points',
+    sheet.includes('Не хватает баллов: нужно 1, на балансе 0') && sheet.includes('Пополнение звёздами скоро появится')
+    && sheet.includes('Получить баллы бесплатно'), sheet);
+  check('G Stars off → no invoice requested', !calls.some(c => c.includes('stars/invoice')));
+  check('G settings menu has «AI-баланс и пополнение»',
+    await page.evaluate(() => { closeSheet(); openSettings(); return document.getElementById('bottom-sheet').innerText; })
+      .then(t => t.includes('AI-баланс и пополнение')));
+  check('G no page errors', errors.length === 0, errors.join(' | '));
   await page.close();
 }
 

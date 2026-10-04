@@ -429,6 +429,37 @@ for (const [label, opts, expectFallback] of [
   await page.close();
 }
 
+// ── I: payments emergency stop (PAYMENTS_DISABLED on the backend) ─────────
+{
+  const page = await browser.newPage();
+  const errors = []; page.on('pageerror', e => errors.push(String(e)));
+  const calls = []; await mockApi(page, calls);
+  await page.route('https://polyana.coiqa.ru/api/{wallet/me,payments/**}', route => {
+    const p = new URL(route.request().url()).pathname.replace('/api', '');
+    const json = (b, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(b) });
+    calls.push(route.request().method() + ' ' + p);
+    if (p === '/wallet/me') return json({ total_available_points: 3 });
+    if (p === '/payments/packages') return json({ enabled: false, disabled: true, packages: [] });
+    return json({ detail: 'payments_disabled' }, 503);
+  });
+  await stubTelegram(page);
+  await page.goto(BASE);
+  await page.waitForTimeout(1200);
+  await page.evaluate(() => { Telegram.WebApp.openInvoice = () => { window.__opened = true; }; });
+  await page.evaluate(() => openTopup());
+  await page.waitForTimeout(400);
+  const sheet = await page.$eval('#bottom-sheet', e => e.innerText).catch(() => '');
+  check('I disabled → «Пополнение временно недоступно» in the top-up sheet',
+    sheet.includes('Пополнение временно недоступно') && !sheet.includes('скоро появится'), sheet);
+  await page.evaluate(() => { closeSheet(); return buyStars('points_100'); });  // e.g. a stale sheet
+  await page.waitForTimeout(300);
+  const t = await page.$eval('#toast', e => e.textContent).catch(() => '');
+  check('I invoice 503 payments_disabled → same text, no invoice opened',
+    t.includes('Пополнение временно недоступно') && !(await page.evaluate(() => window.__opened)), t);
+  check('I no page errors', errors.length === 0, errors.join(' | '));
+  await page.close();
+}
+
 // ── H: invitation screen opens and closes (closeInvite) ────────────────────
 {
   const page = await browser.newPage();

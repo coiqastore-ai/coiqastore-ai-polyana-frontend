@@ -2903,6 +2903,8 @@ function closeInvite() {
 // /wallet/me until the balance grows.
 // ═══════════════════════════════════════════════════════════════════════════
 const TOPUP = { busy: false };
+// Backend emergency stop (PAYMENTS_DISABLED): no new invoices for anyone.
+const PAYMENTS_DISABLED_TEXT = 'Пополнение временно недоступно';
 // The card top-up stored a receipt email here; it is not used any more.
 try { localStorage.removeItem('polyana_email'); } catch {}
 
@@ -2936,8 +2938,10 @@ async function openTopup(reason = '') {
         }
     }
     if (!items.length) {
-        items.push({ icon: '⏳', label: pk.enabled ? 'Обновите Telegram, чтобы оплатить звёздами'
-                                                  : 'Пополнение звёздами скоро появится', fn: 'closeSheet()' });
+        const why = pk.disabled ? PAYMENTS_DISABLED_TEXT
+            : pk.enabled ? 'Обновите Telegram, чтобы оплатить звёздами'
+            : 'Пополнение звёздами скоро появится';
+        items.push({ icon: '⏳', label: why, fn: 'closeSheet()' });
     }
     items.push({ icon: '🎁', label: 'Получить баллы бесплатно', fn: 'closeSheet();openReferral()' });
     openSheet(title, items);
@@ -2955,7 +2959,9 @@ async function buyStars(code) {
     } catch (e) {
         TOPUP.busy = false;
         hapticNotif('error');
-        toast(e?.status === 410 ? 'Пополнение звёздами пока недоступно' : 'Не удалось создать счёт, попробуйте ещё раз');
+        toast(apiErrorDetail(e) === 'payments_disabled' ? PAYMENTS_DISABLED_TEXT
+            : e?.status === 410 ? 'Пополнение звёздами пока недоступно'
+            : 'Не удалось создать счёт, попробуйте ещё раз');
         return;
     }
     if (!d?.invoice_link || !S.tg?.openInvoice) {

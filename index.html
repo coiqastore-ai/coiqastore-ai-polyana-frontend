@@ -2891,6 +2891,11 @@ async function openInviteScreen() {
     renderInviteThemes();
 }
 
+function closeInvite() {
+    setBackBtn(null);
+    showScreen('s-detail');
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // AI-BALANCE & TOP-UP (Telegram Stars only)
 // Inside Telegram digital goods are sold only for Stars (Telegram rules): no card payments here.
@@ -2959,25 +2964,31 @@ async function buyStars(code) {
         return;
     }
     try {
-        S.tg.openInvoice(d.invoice_link, status => { onInvoiceClosed(status, before, d.total_points); });
+        S.tg.openInvoice(d.invoice_link, status => { onInvoiceClosed(status, before); });
     } catch {
         TOPUP.busy = false;
         toast('Не удалось открыть оплату, попробуйте ещё раз');
     }
 }
 
-async function onInvoiceClosed(status, before, added) {
+async function onInvoiceClosed(status, before) {
     try {
         if (status === 'paid' || status === 'pending') {
-            hapticNotif('success');
-            toast('Оплата прошла, начисляем баллы…', null, 10000);
-            const now = await waitForCredit(before, 10000);
+            // Only «paid» is a confirmed payment; «pending» may still fail.
+            const paid = status === 'paid';
+            if (paid) hapticNotif('success');
+            toast(paid ? 'Оплата прошла, начисляем баллы…' : 'Платёж обрабатывается…', null, 10000);
+            // Without a balance from before the invoice we can't tell a credit from
+            // the old balance, so we don't claim one.
+            const now = before === null ? null : await waitForCredit(before, 10000);
             if (now !== null) {
-                const plus = before === null ? added : now - before;
-                toast(`✅ Начислено +${pointsText(plus)}. Баланс: ${pointsText(now)}`, null, 5000);
+                hapticNotif('success');
+                toast(`✅ Начислено +${pointsText(now - before)}. Баланс: ${pointsText(now)}`, null, 5000);
                 if ($('s-referral')?.classList.contains('active')) openReferral();  // refresh its balance cards
-            } else {
+            } else if (paid) {
                 toast('Оплата прошла. Баллы появятся в течение пары минут', null, 5000);
+            } else {
+                toast('Платёж ещё обрабатывается. Баллы придут, когда Telegram его подтвердит', null, 5000);
             }
         } else if (status === 'cancelled') {
             toast('Оплата отменена');
@@ -2997,7 +3008,7 @@ async function waitForCredit(before, ms) {
         await new Promise(r => setTimeout(r, 1000));
         try {
             const now = await walletPoints();
-            if (before === null || now > before) return now;
+            if (now > before) return now;
         } catch {}
     }
     return null;

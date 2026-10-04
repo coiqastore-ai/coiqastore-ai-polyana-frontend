@@ -331,21 +331,29 @@ for (const [label, opts, expectFallback] of [
   check('G no YooKassa / card / receipt email in the Mini App',
     !/ЮК|yookassa|\/balance\/topup|email-sheet|topup-email/i.test(html));
 
-  for (const [status, expectToast, credited] of [
+  for (const [status, expectToast, credited, noBaseline = false] of [
     ['paid', '✅ Начислено +110 баллов. Баланс: 135 баллов', true],
+    ['pending', 'Платёж ещё обрабатывается', false],
     ['cancelled', 'Оплата отменена', false],
     ['failed', 'Оплата не прошла', false],
+    // /wallet/me failed before the invoice: no «+N» may be claimed from the old balance
+    ['paid', 'Оплата прошла. Баллы появятся в течение пары минут', false, true],
   ]) {
     const page = await browser.newPage();
     const errors = []; page.on('pageerror', e => errors.push(String(e)));
-    page.on('console', m => { if (m.type() === 'error') errors.push('console: ' + m.text()); });
+    // Chromium logs failed HTTP responses itself (the no-baseline case answers 500 on purpose).
+    page.on('console', m => { if (m.type() === 'error' && !m.text().startsWith('Failed to load resource'))
+      errors.push('console: ' + m.text()); });
     const calls = []; await mockApi(page, calls);
     const st = { points: 25, invoices: [] };
     await page.route('https://polyana.coiqa.ru/api/{wallet/me,payments/**}', async route => {
       const req = route.request(); const p = new URL(req.url()).pathname.replace('/api', '');
       const json = b => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(b) });
       calls.push(req.method() + ' ' + p);
-      if (p === '/wallet/me') return json({ total_available_points: st.points });
+      if (p === '/wallet/me') {
+        if (st.failWallet) { st.failWallet = false; return route.fulfill({ status: 500, body: '{}' }); }
+        return json({ total_available_points: st.points });
+      }
       if (p === '/payments/packages') return json({ enabled: true, packages: [
         { code: 'points_300', title: 'Оптимальный', total_points: 110, stars: 50 }] });
       if (p === '/payments/stars/invoice') {
@@ -366,23 +374,27 @@ for (const [label, opts, expectFallback] of [
       window.__credit = credited;
     }, { status, credited });
     if (credited) setTimeout(() => { st.points = 135; }, 1600);
+    const label = noBaseline ? `${status} (no baseline)` : status;
 
     await page.evaluate(() => openTopup());
     await page.waitForTimeout(400);
     const sheet = await page.$eval('#bottom-sheet', e => e.innerText).catch(() => '');
-    check(`G ${status}: sheet shows balance and Stars package`,
+    check(`G ${label}: sheet shows balance and Stars package`,
       sheet.includes('AI-баланс: 25 баллов') && sheet.includes('110 баллов — 50 ⭐') && sheet.includes('Получить баллы бесплатно'), sheet);
+    if (noBaseline) st.failWallet = true;
     await page.evaluate(() => buyStars('points_300'));
     await page.waitForFunction(t => (document.getElementById('toast')?.textContent || '').includes(t),
-      expectToast, { timeout: 8000 }).catch(() => {});
+      expectToast, { timeout: 14000 }).catch(() => {});
     const t = await page.$eval('#toast', e => e.textContent).catch(() => '');
-    check(`G ${status}: invoice for the package opened`,
+    check(`G ${label}: invoice for the package opened`,
       JSON.stringify(st.invoices) === JSON.stringify([{ package_code: 'points_300' }]) && await page.evaluate(() => window.__invoice) === 'https://t.me/$inv',
       JSON.stringify(st.invoices));
-    check(`G ${status}: toast «${expectToast}»`, t.includes(expectToast), t);
+    check(`G ${label}: toast «${expectToast}»`, t.includes(expectToast), t);
     const polls = calls.filter(c => c === 'GET /wallet/me').length;
-    check(`G ${status}: wallet polled only after «paid»`, credited ? polls >= 3 : polls <= 2, String(polls));
-    check(`G ${status}: no page or console errors`, errors.length === 0, errors.join(' | '));
+    check(`G ${label}: wallet polled only after «paid»/«pending» with a baseline`,
+      (status === 'paid' || status === 'pending') && !noBaseline ? polls >= 3 : polls <= 3, String(polls));
+    check(`G ${label}: no «Начислено» without a confirmed credit`, credited || !t.includes('Начислено'), t);
+    check(`G ${label}: no page or console errors`, errors.length === 0, errors.join(' | '));
     await page.close();
   }
 
@@ -414,6 +426,25 @@ for (const [label, opts, expectFallback] of [
     await page.evaluate(() => { closeSheet(); openSettings(); return document.getElementById('bottom-sheet').innerText; })
       .then(t => t.includes('AI-баланс и пополнение')));
   check('G no page errors', errors.length === 0, errors.join(' | '));
+  await page.close();
+}
+
+// ── H: invitation screen opens and closes (closeInvite) ────────────────────
+{
+  const page = await browser.newPage();
+  const errors = []; page.on('pageerror', e => errors.push(String(e)));
+  const calls = []; await mockApi(page, calls);
+  await stubTelegram(page);
+  await page.goto(BASE);
+  await page.waitForTimeout(1200);
+  await page.evaluate(() => { S.currentEvent = { id: 42, name: 'Шашлыки' }; return openInviteScreen(); })
+    .catch(e => errors.push(String(e)));
+  await page.waitForTimeout(300);
+  check('H invite screen opens', await page.$eval('#s-invite', e => e.classList.contains('active')).catch(() => false));
+  await page.click('#s-invite .detail-back').catch(e => errors.push(String(e)));
+  await page.waitForTimeout(200);
+  check('H ← closes it back to the event', await page.$eval('#s-detail', e => e.classList.contains('active')).catch(() => false));
+  check('H no page errors', errors.length === 0, errors.join(' | '));
   await page.close();
 }
 

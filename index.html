@@ -5065,6 +5065,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             // Show share screen inline
             showShareScreen(token);
         }
+        // Deep link: editor's preview of an unpublished recipe (from Поляна Студия)
+        else if (startParam && startParam.startsWith('editorialpv_')) {
+            await loadEditorialRecipe(startParam.replace('editorialpv_', ''), true);
+        }
         // Deep link: editorial recipe
         else if (startParam && startParam.startsWith('editorial_')) {
             const slug = startParam.replace('editorial_', '');
@@ -5098,6 +5102,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         hideMainBtn();
+    } else if (startParam && startParam.startsWith('editorialpv_')) {
+        await loadEditorialRecipe(startParam.replace('editorialpv_', ''), true);
     } else if (startParam && startParam.startsWith('editorial_')) {
         // Not authenticated — show editorial recipe anyway (public)
         const slug = startParam.replace('editorial_', '');
@@ -5145,13 +5151,15 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 // ═══ Editorial Recipe Functions ═══
-async function loadEditorialRecipe(slug) {
+// preview=true: slug is the signed "<id>_<sig>" token of an unpublished recipe
+async function loadEditorialRecipe(slug, preview = false) {
     showScreen('s-editorial');
     const container = $('ed-content');
     container.innerHTML = '<div class="loading-wrap" style="min-height:60vh"><div class="logo-spin">🌿</div></div>';
 
     try {
-        const r = await fetch(`${API}/public/recipes/${encodeURIComponent(slug)}`);
+        const path = preview ? 'public/recipes/preview/' : 'public/recipes/';
+        const r = await fetch(`${API}/${path}${encodeURIComponent(slug)}`);
         if (!r.ok) {
             container.innerHTML = '<div class="auth-wrap"><div class="auth-icon">🔍</div><h2>Рецепт не найден</h2><p style="color:var(--hint);margin-top:8px">Возможно, рецепт был удалён или ссылка устарела.</p></div>';
             return;
@@ -5168,6 +5176,10 @@ function renderEditorialRecipe(r) {
     $('ed-title').textContent = r.emoji || '🍽';
 
     let html = '<div style="max-width:640px;margin:0 auto">';
+
+    if (r.preview) {
+        html += '<div class="card" style="margin-bottom:16px;padding:12px;font-size:14px">👁 Превью для редактора: рецепт ещё не опубликован, читатели его пока не видят.</div>';
+    }
 
     const photo = recipePhotoUrl(r);
     if (photo) {
@@ -5226,10 +5238,12 @@ function renderEditorialRecipe(r) {
         html += '</div>';
     }
 
-    // Save button
-    html += `<div id="ed-save-wrap" style="position:sticky;bottom:0;padding:12px 0;background:var(--bg)">`;
-    html += `<button class="btn btn-primary" style="width:100%" onclick="saveEditorialRecipe(${r.id})">💾 Сохранить рецепт</button>`;
-    html += '</div>';
+    // Save button (an unpublished recipe can't be saved yet)
+    if (!r.preview) {
+        html += `<div id="ed-save-wrap" style="position:sticky;bottom:0;padding:12px 0;background:var(--bg)">`;
+        html += `<button class="btn btn-primary" style="width:100%" onclick="saveEditorialRecipe(${r.id})">💾 Сохранить рецепт</button>`;
+        html += '</div>';
+    }
 
     html += '</div>';
     container.innerHTML = html;

@@ -52,6 +52,7 @@ async function mockApi(page, calls) {
     calls.push(route.request().method() + ' ' + p);
     const json = b => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(b) });
     if (p === '/public/recipes/id7') return json(EDITORIAL);
+    if (p === '/public/recipes/preview/7_' + 'b'.repeat(20)) return json({ ...EDITORIAL, preview: true });
     if (p.startsWith('/public/recipes/')) return route.fulfill({ status: 404, body: '{}' });
     if (p === '/onboarding/status') return json({ status: 'completed' });
     if (p === '/recipes/5') return json(RECIPE);
@@ -106,6 +107,22 @@ const browser = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePa
   check('A editorial photo from backend path', img === EDITORIAL_PHOTO, String(img));
   check('A editorial screen active', await page.$eval('#s-editorial', e => e.classList.contains('active')).catch(() => false));
   check('A no page errors', errors.length === 0, errors.join(' | '));
+  await page.close();
+}
+
+// ── A2: editor's preview link of an unpublished recipe ─────────────────────
+{
+  const page = await browser.newPage();
+  const errors = []; page.on('pageerror', e => errors.push(String(e)));
+  const calls = []; await mockApi(page, calls);
+  await page.goto(BASE + '?startapp=editorialpv_7_' + 'b'.repeat(20));
+  await page.waitForFunction(() => document.querySelector('#ed-content h1'), null, { timeout: 8000 }).catch(() => {});
+  check('A2 editorialpv_ → GET /public/recipes/preview/<token>',
+    calls.includes('GET /public/recipes/preview/7_' + 'b'.repeat(20)), calls.join(','));
+  const text = await page.$eval('#ed-content', e => e.textContent).catch(() => '');
+  check('A2 preview banner shown', text.includes('Превью для редактора'), text.slice(0, 120));
+  check('A2 no save button on a preview', !(await page.$('#ed-save-wrap')));
+  check('A2 no page errors', errors.length === 0, errors.join(' | '));
   await page.close();
 }
 

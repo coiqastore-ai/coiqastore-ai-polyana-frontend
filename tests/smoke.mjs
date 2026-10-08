@@ -500,6 +500,48 @@ for (const [label, opts, expectFallback] of [
   await page.close();
 }
 
+// ── J: event menu «Редактировать» → filled form → PUT /events/{id} ─────────
+{
+  const page = await browser.newPage();
+  const errors = []; page.on('pageerror', e => errors.push(String(e)));
+  const calls = []; await mockApi(page, calls);
+  const puts = [];
+  await page.route('https://polyana.coiqa.ru/api/events/42', route => {
+    if (route.request().method() !== 'PUT') return route.fallback();
+    const body = JSON.parse(route.request().postData());
+    puts.push(body);
+    return route.fulfill({ status: 200, contentType: 'application/json',
+      body: JSON.stringify({ id: 42, ...body }) });
+  });
+  await stubTelegram(page, { mainButton: 'none' });
+  await page.goto(BASE);
+  await page.waitForTimeout(1200);
+  const ev = { id: 42, name: 'Шашлыки', event_date: '2030-06-01T15:00:00Z', location: 'Дача',
+               description: 'Берём уголь', is_owner: true };
+  await page.evaluate(e => { S.currentEvent = e; openEventMenu(); }, ev).catch(e => errors.push(String(e)));
+  await page.waitForTimeout(200);
+  const menu = await page.evaluate(() => document.body.innerText);
+  check('J menu has «Редактировать», no «скоро»', menu.includes('Редактировать') && !menu.includes('скоро'));
+  await page.evaluate(() => { closeSheet(); goEditEvent(); }).catch(e => errors.push(String(e)));
+  await page.waitForTimeout(200);
+  const form = await page.evaluate(() => ({ title: $('create-title').textContent, name: $('ev-name').value,
+    loc: $('ev-location').value, desc: $('ev-desc').value, date: $('ev-date').value,
+    tpl: getComputedStyle($('template-row')).display }));
+  check('J edit form filled', form.title === 'Изменить событие' && form.name === 'Шашлыки' && form.loc === 'Дача'
+    && form.desc === 'Берём уголь' && form.date === '2030-06-01' && form.tpl === 'none', JSON.stringify(form));
+  await page.fill('#ev-name', 'Шашлыки у Нины');
+  await page.fill('#ev-location', '');
+  await page.click('#mb-fallback-btn');
+  await page.waitForTimeout(400);
+  check('J save → one PUT with the changes', puts.length === 1 && puts[0].name === 'Шашлыки у Нины'
+    && puts[0].location === '' && new Date(puts[0].event_date).getTime() === new Date(ev.event_date).getTime(),
+    JSON.stringify(puts));
+  check('J back on the event detail', await page.$eval('#s-detail', e => e.classList.contains('active')).catch(() => false));
+  check('J no draft saved while editing', await page.evaluate(() => localStorage.getItem('polyana_draft')) === null);
+  check('J no page errors', errors.length === 0, errors.join(' | '));
+  await page.close();
+}
+
 await browser.close();
 srv.kill();
 let fail = 0;

@@ -1096,12 +1096,12 @@
 <div id="s-create" class="screen">
     <div class="page">
         <div class="greeting-row" style="margin-bottom:16px">
-            <div class="greeting-name">Новое событие</div>
-            <button class="settings-btn" onclick="goHome()" aria-label="Закрыть">✕</button>
+            <div class="greeting-name" id="create-title">Новое событие</div>
+            <button class="settings-btn" onclick="closeCreate()" aria-label="Закрыть">✕</button>
         </div>
 
         <!-- Templates -->
-        <label class="form-label">Шаблон</label>
+        <label class="form-label" id="template-label">Шаблон</label>
         <div class="template-row" id="template-row">
             <button class="tpl-btn" data-tpl="shashlyki" onclick="applyTemplate(this)">
                 <span class="tpl-emoji">🔥</span>
@@ -1865,8 +1865,82 @@ function goHome() {
     loadEvents();
 }
 
+function setCreateMode(editing) {
+    S.editingEventId = editing ? editing.id : null;
+    $('create-title').textContent = editing ? 'Изменить событие' : 'Новое событие';
+    $('template-label').style.display = editing ? 'none' : '';
+    $('template-row').style.display = editing ? 'none' : '';
+}
+
+function closeCreate() {
+    const ev = S.editingEventId && S.currentEvent;
+    setCreateMode(null);
+    if (ev) goDetail(ev); else goHome();
+}
+
+// «Редактировать» in the event menu: the create form, filled, saved with PUT /events/{id}
+function goEditEvent() {
+    const ev = S.currentEvent;
+    if (!ev) return;
+    haptic();
+    showScreen('s-create');
+    clearCreateForm();
+    setCreateMode(ev);
+    setBackBtn(closeCreate);
+    setMainBtn('Сохранить', submitEdit);
+    $('ev-name').value = ev.name || '';
+    if (ev.event_date) {
+        const d = new Date(ev.event_date);
+        if (!isNaN(d)) {
+            const pad = n => String(n).padStart(2, '0');
+            $('ev-date').value = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+            $('ev-time').value = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+        }
+    }
+    $('ev-location').value = ev.location || '';
+    $('ev-desc').value = ev.description || '';
+    if (ev.description) $('extra-body').classList.add('open');
+}
+
+// Local date + time from the form as an ISO instant (same rule as create)
+function formEventDate() {
+    const dateVal = $('ev-date').value;
+    const timeVal = $('ev-time').value || '18:00';
+    if (!dateVal) return null;
+    const dt = new Date(`${dateVal}T${timeVal}`);
+    return isNaN(dt) ? `${dateVal}T${timeVal}:00` : dt.toISOString();
+}
+
+async function submitEdit() {
+    if (!validateName()) { hapticNotif('error'); return; }
+    const id = S.editingEventId;
+    if (!id) return;
+    mainBtnBusy(true);
+    try {
+        // '' clears location/description: the backend skips only null
+        const updated = await api(`/events/${id}`, 'PUT', {
+            name: $('ev-name').value.trim(),
+            event_date: formEventDate(),
+            location: $('ev-location').value.trim(),
+            description: $('ev-desc').value.trim(),
+        });
+        hapticNotif('success');
+        const ev = { ...S.currentEvent, ...updated };
+        setCreateMode(null);
+        goDetail(ev);
+        toast('Событие обновлено');
+    } catch(e) {
+        hapticNotif('error');
+        console.error('editEvent:', e);
+        toast(e.status === 403 ? 'Менять событие может только организатор' : 'Не удалось сохранить');
+    } finally {
+        mainBtnBusy(false);
+    }
+}
+
 function goCreate(template=null) {
     haptic();
+    setCreateMode(null);
     showScreen('s-create');
     setBackBtn(goHome);
     setMainBtn('Создать событие', submitCreate);
@@ -2655,8 +2729,9 @@ function clearCreateForm() {
     $('extra-body').classList.remove('open');
 }
 
-// Draft save/restore
+// Draft save/restore (new events only, editing an event keeps no draft)
 function saveDraft() {
+    if (S.editingEventId) return;
     try {
         localStorage.setItem('polyana_draft', JSON.stringify({
             name: $('ev-name').value,
@@ -2833,7 +2908,7 @@ function openEventMenu() {
     if (!ev) return;
     const items = [
         {icon:'🎨', label:'Сделать приглашение', fn:'closeSheet();openInviteScreen()'},
-        {icon:'✏️', label:'Редактировать', fn:"closeSheet();toast('Редактирование — скоро')"},
+        ...(ev.is_owner !== false ? [{icon:'✏️', label:'Редактировать', fn:'closeSheet();goEditEvent()'}] : []),
         {icon:'🔗', label:'Пригласить гостей (ссылка)', fn:'closeSheet();inviteCollab()'},
     ];
     if (ev.is_owner !== false) {

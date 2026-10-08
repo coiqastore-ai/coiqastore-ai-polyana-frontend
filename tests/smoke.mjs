@@ -41,7 +41,9 @@ const RECIPE = {
 };
 const EDITORIAL = { id: 7, name: 'Борщ "Классика" <i>', emoji: '🍲', servings: 4, cook_time_minutes: 90,
   description: 'Описание', nutrition: { calories_kcal: 420, protein_g: 20, fat_g: 15, carbs_g: 45, source: 'ai_estimated' },
-  ingredients: [{ name: 'Свёкла', qty: 2, unit: 'шт' }], steps: [{ step_number: 1, text: 'Варить' }] };
+  ingredients: [{ name: 'Свёкла', qty: 2, unit: 'шт' }], steps: [{ step_number: 1, text: 'Варить' }],
+  editorial_image_url: '/api/files/editorial/' + 'a'.repeat(64) };
+const EDITORIAL_PHOTO = 'https://polyana.coiqa.ru/api/files/editorial/' + 'a'.repeat(64);
 
 async function mockApi(page, calls) {
   await page.route('https://polyana.coiqa.ru/api/**', async route => {
@@ -100,6 +102,8 @@ const browser = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePa
   const h1 = await page.$eval('#ed-content h1', e => e.textContent).catch(() => null);
   check('A editorial_id7 → GET /public/recipes/id7', calls.includes('GET /public/recipes/id7'), calls.join(','));
   check('A editorial title rendered as text (escaped)', h1 === EDITORIAL.name, String(h1));
+  const img = await page.$eval('#ed-content .rdetail-photo img', e => e.getAttribute('src')).catch(() => null);
+  check('A editorial photo from backend path', img === EDITORIAL_PHOTO, String(img));
   check('A editorial screen active', await page.$eval('#s-editorial', e => e.classList.contains('active')).catch(() => false));
   check('A no page errors', errors.length === 0, errors.join(' | '));
   await page.close();

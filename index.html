@@ -3520,6 +3520,16 @@ function closeRdetail() {
     }
 }
 
+// Telegram photo of an imported recipe, or the channel photo (editorial and its saved copies):
+// an https URL or a backend path like /api/files/editorial/<sha256>.
+function recipePhotoUrl(r) {
+    if (r.source_photo_file_id) return `${API}/files/photo/${encodeURIComponent(r.source_photo_file_id)}`;
+    const u = r.editorial_image_url || '';
+    if (u.startsWith('/')) return new URL(u, API).href;
+    if (u.startsWith('https://')) return u;
+    return '';
+}
+
 function renderRdetail(r) {
     const badges = [];
     if (r.category) badges.push(r.category);
@@ -3529,18 +3539,19 @@ function renderRdetail(r) {
 
     let html = '';
 
-    // Photo banner (imported from a Telegram photo)
-    if (r.source_photo_file_id) {
+    // Photo banner (imported Telegram photo or the channel photo)
+    const photo = recipePhotoUrl(r);
+    if (photo) {
         html += `
         <div class="rdetail-photo">
-            <img src="${API}/files/photo/${encodeURIComponent(r.source_photo_file_id)}" alt=""
+            <img src="${esc(photo)}" alt=""
                  onerror="this.closest('.rdetail-photo').style.display='none'">
         </div>`;
     }
 
     html += `
         <div class="rdetail-hero">
-            ${r.source_photo_file_id ? '' : `<span class="rdetail-emoji">${r.emoji || '🍽'}</span>`}
+            ${photo ? '' : `<span class="rdetail-emoji">${r.emoji || '🍽'}</span>`}
             <div class="rdetail-name">${esc(r.name)}</div>
             <div class="rdetail-badges">
                 ${badges.map(b => `<span class="rdetail-badge">${esc(b)}</span>`).join('')}
@@ -5157,6 +5168,15 @@ function renderEditorialRecipe(r) {
     $('ed-title').textContent = r.emoji || '🍽';
 
     let html = '<div style="max-width:640px;margin:0 auto">';
+
+    const photo = recipePhotoUrl(r);
+    if (photo) {
+        html += `
+        <div class="rdetail-photo" style="margin-bottom:16px">
+            <img src="${esc(photo)}" alt=""
+                 onerror="this.closest('.rdetail-photo').style.display='none'">
+        </div>`;
+    }
 
     // Title & description
     html += `<h1 style="font-size:22px;font-weight:700;margin-bottom:8px">${esc(r.name)}</h1>`;

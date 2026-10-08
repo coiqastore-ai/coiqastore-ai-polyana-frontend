@@ -531,6 +531,12 @@ for (const [label, opts, expectFallback] of [
     && form.desc === 'Берём уголь' && form.date === '2030-06-01' && form.tpl === 'none', JSON.stringify(form));
   await page.fill('#ev-name', 'Шашлыки у Нины');
   await page.fill('#ev-location', '');
+  await page.fill('#ev-date', '');
+  await page.click('#mb-fallback-btn');
+  await page.waitForTimeout(300);
+  const stillEditing = await page.$eval('#s-create', e => e.classList.contains('active')).catch(() => false);
+  check('J cleared date → no PUT, stays on the form', puts.length === 0 && stillEditing, JSON.stringify(puts));
+  await page.fill('#ev-date', form.date);
   await page.click('#mb-fallback-btn');
   await page.waitForTimeout(400);
   check('J save → one PUT with the changes', puts.length === 1 && puts[0].name === 'Шашлыки у Нины'

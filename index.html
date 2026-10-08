@@ -1915,6 +1915,12 @@ async function submitEdit() {
     if (!validateName()) { hapticNotif('error'); return; }
     const id = S.editingEventId;
     if (!id) return;
+    // The backend skips null fields, so a cleared date would silently stay
+    if (!$('ev-date').value && S.currentEvent?.event_date) {
+        hapticNotif('error');
+        toast('Дату события нельзя убрать, только изменить');
+        return;
+    }
     mainBtnBusy(true);
     try {
         // '' clears location/description: the backend skips only null

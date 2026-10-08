@@ -41,7 +41,9 @@ const RECIPE = {
 };
 const EDITORIAL = { id: 7, name: 'Борщ "Классика" <i>', emoji: '🍲', servings: 4, cook_time_minutes: 90,
   description: 'Описание', nutrition: { calories_kcal: 420, protein_g: 20, fat_g: 15, carbs_g: 45, source: 'ai_estimated' },
-  ingredients: [{ name: 'Свёкла', qty: 2, unit: 'шт' }], steps: [{ step_number: 1, text: 'Варить' }] };
+  ingredients: [{ name: 'Свёкла', qty: 2, unit: 'шт' }], steps: [{ step_number: 1, text: 'Варить' }],
+  editorial_image_url: '/api/files/editorial/' + 'a'.repeat(64) };
+const EDITORIAL_PHOTO = 'https://polyana.coiqa.ru/api/files/editorial/' + 'a'.repeat(64);
 
 async function mockApi(page, calls) {
   await page.route('https://polyana.coiqa.ru/api/**', async route => {
@@ -50,6 +52,7 @@ async function mockApi(page, calls) {
     calls.push(route.request().method() + ' ' + p);
     const json = b => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(b) });
     if (p === '/public/recipes/id7') return json(EDITORIAL);
+    if (p === '/public/recipes/preview/7_' + 'b'.repeat(20)) return json({ ...EDITORIAL, preview: true });
     if (p.startsWith('/public/recipes/')) return route.fulfill({ status: 404, body: '{}' });
     if (p === '/onboarding/status') return json({ status: 'completed' });
     if (p === '/recipes/5') return json(RECIPE);
@@ -100,8 +103,26 @@ const browser = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePa
   const h1 = await page.$eval('#ed-content h1', e => e.textContent).catch(() => null);
   check('A editorial_id7 → GET /public/recipes/id7', calls.includes('GET /public/recipes/id7'), calls.join(','));
   check('A editorial title rendered as text (escaped)', h1 === EDITORIAL.name, String(h1));
+  const img = await page.$eval('#ed-content .rdetail-photo img', e => e.getAttribute('src')).catch(() => null);
+  check('A editorial photo from backend path', img === EDITORIAL_PHOTO, String(img));
   check('A editorial screen active', await page.$eval('#s-editorial', e => e.classList.contains('active')).catch(() => false));
   check('A no page errors', errors.length === 0, errors.join(' | '));
+  await page.close();
+}
+
+// ── A2: editor's preview link of an unpublished recipe ─────────────────────
+{
+  const page = await browser.newPage();
+  const errors = []; page.on('pageerror', e => errors.push(String(e)));
+  const calls = []; await mockApi(page, calls);
+  await page.goto(BASE + '?startapp=editorialpv_7_' + 'b'.repeat(20));
+  await page.waitForFunction(() => document.querySelector('#ed-content h1'), null, { timeout: 8000 }).catch(() => {});
+  check('A2 editorialpv_ → GET /public/recipes/preview/<token>',
+    calls.includes('GET /public/recipes/preview/7_' + 'b'.repeat(20)), calls.join(','));
+  const text = await page.$eval('#ed-content', e => e.textContent).catch(() => '');
+  check('A2 preview banner shown', text.includes('Превью для редактора'), text.slice(0, 120));
+  check('A2 no save button on a preview', !(await page.$('#ed-save-wrap')));
+  check('A2 no page errors', errors.length === 0, errors.join(' | '));
   await page.close();
 }
 
@@ -476,6 +497,54 @@ for (const [label, opts, expectFallback] of [
   await page.waitForTimeout(200);
   check('H ← closes it back to the event', await page.$eval('#s-detail', e => e.classList.contains('active')).catch(() => false));
   check('H no page errors', errors.length === 0, errors.join(' | '));
+  await page.close();
+}
+
+// ── J: event menu «Редактировать» → filled form → PUT /events/{id} ─────────
+{
+  const page = await browser.newPage();
+  const errors = []; page.on('pageerror', e => errors.push(String(e)));
+  const calls = []; await mockApi(page, calls);
+  const puts = [];
+  await page.route('https://polyana.coiqa.ru/api/events/42', route => {
+    if (route.request().method() !== 'PUT') return route.fallback();
+    const body = JSON.parse(route.request().postData());
+    puts.push(body);
+    return route.fulfill({ status: 200, contentType: 'application/json',
+      body: JSON.stringify({ id: 42, ...body }) });
+  });
+  await stubTelegram(page, { mainButton: 'none' });
+  await page.goto(BASE);
+  await page.waitForTimeout(1200);
+  const ev = { id: 42, name: 'Шашлыки', event_date: '2030-06-01T15:00:00Z', location: 'Дача',
+               description: 'Берём уголь', is_owner: true };
+  await page.evaluate(e => { S.currentEvent = e; openEventMenu(); }, ev).catch(e => errors.push(String(e)));
+  await page.waitForTimeout(200);
+  const menu = await page.evaluate(() => document.body.innerText);
+  check('J menu has «Редактировать», no «скоро»', menu.includes('Редактировать') && !menu.includes('скоро'));
+  await page.evaluate(() => { closeSheet(); goEditEvent(); }).catch(e => errors.push(String(e)));
+  await page.waitForTimeout(200);
+  const form = await page.evaluate(() => ({ title: $('create-title').textContent, name: $('ev-name').value,
+    loc: $('ev-location').value, desc: $('ev-desc').value, date: $('ev-date').value,
+    tpl: getComputedStyle($('template-row')).display }));
+  check('J edit form filled', form.title === 'Изменить событие' && form.name === 'Шашлыки' && form.loc === 'Дача'
+    && form.desc === 'Берём уголь' && form.date === '2030-06-01' && form.tpl === 'none', JSON.stringify(form));
+  await page.fill('#ev-name', 'Шашлыки у Нины');
+  await page.fill('#ev-location', '');
+  await page.fill('#ev-date', '');
+  await page.click('#mb-fallback-btn');
+  await page.waitForTimeout(300);
+  const stillEditing = await page.$eval('#s-create', e => e.classList.contains('active')).catch(() => false);
+  check('J cleared date → no PUT, stays on the form', puts.length === 0 && stillEditing, JSON.stringify(puts));
+  await page.fill('#ev-date', form.date);
+  await page.click('#mb-fallback-btn');
+  await page.waitForTimeout(400);
+  check('J save → one PUT with the changes', puts.length === 1 && puts[0].name === 'Шашлыки у Нины'
+    && puts[0].location === '' && new Date(puts[0].event_date).getTime() === new Date(ev.event_date).getTime(),
+    JSON.stringify(puts));
+  check('J back on the event detail', await page.$eval('#s-detail', e => e.classList.contains('active')).catch(() => false));
+  check('J no draft saved while editing', await page.evaluate(() => localStorage.getItem('polyana_draft')) === null);
+  check('J no page errors', errors.length === 0, errors.join(' | '));
   await page.close();
 }
 
